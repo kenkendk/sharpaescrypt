@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("HexaD")]
 [assembly: AssemblyProduct("SharpAESCrypt")]
-[assembly: AssemblyCopyright("LGPL 2011")]
+[assembly: AssemblyCopyright("LGPL 2014")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
