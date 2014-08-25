@@ -36,7 +36,7 @@
         </member>
         <member name="F:SharpAESCrypt.Strings.CommandlineUnknownMode">
             <summary>
-            A string displayed if the mode is neither e nor d 
+            A string displayed if the mode is neither e nor d
             </summary>
         </member>
         <member name="F:SharpAESCrypt.Strings.UnsupportedHashAlgorithmReuse">
@@ -157,9 +157,14 @@
         <member name="T:SharpAESCrypt.SharpAESCrypt">
             <summary>
             Provides a stream wrapping an AESCrypt file for either encryption or decryption.
-            The file format declare support for 2^64 bytes encrypted data, but .Net has trouble 
-            with files more than 2^63 bytes long, so this module 'only' supports 2^63 bytes 
+            The file format declare support for 2^64 bytes encrypted data, but .Net has trouble
+            with files more than 2^63 bytes long, so this module 'only' supports 2^63 bytes
             (long vs ulong).
+            </summary>
+        </member>
+        <member name="F:SharpAESCrypt.SharpAESCrypt.MAGIC_HEADER">
+            <summary>
+            The header in an AESCrypt file
             </summary>
         </member>
         <member name="F:SharpAESCrypt.SharpAESCrypt.MAX_FILE_VERSION">
@@ -187,11 +192,6 @@
             The size of the SHA-256 output, which matches the KEY_SIZE
             </summary>
         </member>
-        <member name="F:SharpAESCrypt.SharpAESCrypt.MAGIC_HEADER">
-            <summary>
-            The header in an AESCrypt file
-            </summary>
-        </member>
         <member name="F:SharpAESCrypt.SharpAESCrypt.m_stream">
             <summary>
             The stream being encrypted or decrypted
@@ -214,8 +214,7 @@
         </member>
         <member name="F:SharpAESCrypt.SharpAESCrypt.m_length">
             <summary>
-            The length of the data modulus <see cref="F:SharpAESCrypt.SharpAESCrypt.BLOCK_SIZE"/>
-            </summary>
+            The length of the data modulus <see cref="F:SharpAESCrypt.SharpAESCrypt.BLOCK_SIZE" /></summary>
         </member>
         <member name="F:SharpAESCrypt.SharpAESCrypt.m_helper">
             <summary>
@@ -262,6 +261,11 @@
             True if the header HMAC has been read and verified, false otherwise. Used only for decryption.
             </summary>
         </member>
+        <member name="P:SharpAESCrypt.SharpAESCrypt.Crypto">
+            <summary>
+            Helper property to ensure that the crypto stream is initialized before being used
+            </summary>
+        </member>
         <member name="M:SharpAESCrypt.SharpAESCrypt.ReadEncryptionHeader(System.String)">
             <summary>
             Helper function to read and validate the header
@@ -280,138 +284,14 @@
             <param name="identifier">The extension identifier</param>
             <param name="value">The data to set in the extension</param>
         </member>
-        <member name="M:SharpAESCrypt.SharpAESCrypt.RepeatRead(System.IO.Stream,System.Int32)">
-            <summary>
-            Helper function to support reading from streams that chunck data.
-            Will keep reading a stream until <paramref name="count"/> bytes have been read.
-            Throws an exception if the stream is exhausted before <paramref name="count"/> bytes are read.
-            </summary>
-            <param name="stream">The stream to read from</param>
-            <param name="count">The number of bytes to read</param>
-            <returns>The data read</returns>
-        </member>
-        <member name="F:SharpAESCrypt.SharpAESCrypt.Extension_CreatedByIdentifier">
-            <summary>
-            The name inserted as the creator software in the extensions when creating output
-            </summary>
-        </member>
-        <member name="F:SharpAESCrypt.SharpAESCrypt.Extension_InsertCreateByIdentifier">
-            <summary>
-            A value indicating if the extension data should contain the creator software
-            </summary>
-        </member>
-        <member name="F:SharpAESCrypt.SharpAESCrypt.Extension_InsertTimeStamp">
-            <summary>
-            A value indicating if the extensions data should contain timestamp data
-            </summary>
-        </member>
-        <member name="F:SharpAESCrypt.SharpAESCrypt.Extension_InsertPlaceholder">
-            <summary>
-            A value indicating if the extensions data should contain an empty block as suggested by the file format
-            </summary>
-        </member>
-        <member name="F:SharpAESCrypt.SharpAESCrypt.DefaultFileVersion">
-            <summary>
-            The file version to use when creating a new file
-            </summary>
-        </member>
-        <member name="M:SharpAESCrypt.SharpAESCrypt.Encrypt(System.String,System.IO.Stream,System.IO.Stream)">
-            <summary>
-            Encrypts a stream using the supplied password
-            </summary>
-            <param name="password">The password to decrypt with</param>
-            <param name="input">The stream with unencrypted data</param>
-            <param name="output">The encrypted output stream</param>
-        </member>
-        <member name="M:SharpAESCrypt.SharpAESCrypt.Decrypt(System.String,System.IO.Stream,System.IO.Stream)">
-            <summary>
-            Decrypts a stream using the supplied password
-            </summary>
-            <param name="password">The password to encrypt with</param>
-            <param name="input">The stream with encrypted data</param>
-            <param name="output">The unencrypted output stream</param>
-        </member>
-        <member name="M:SharpAESCrypt.SharpAESCrypt.Encrypt(System.String,System.String,System.String)">
-            <summary>
-            Encrypts a file using the supplied password
-            </summary>
-            <param name="password">The password to encrypt with</param>
-            <param name="input">The file with unencrypted data</param>
-            <param name="output">The encrypted output file</param>
-        </member>
-        <member name="M:SharpAESCrypt.SharpAESCrypt.Decrypt(System.String,System.String,System.String)">
-            <summary>
-            Decrypts a file using the supplied password
-            </summary>
-            <param name="password">The password to decrypt with</param>
-            <param name="input">The file with encrypted data</param>
-            <param name="output">The unencrypted output file</param>
-        </member>
-        <member name="M:SharpAESCrypt.SharpAESCrypt.#ctor(System.String,System.IO.Stream,SharpAESCrypt.OperationMode)">
-            <summary>
-            Constructs a new AESCrypt instance, operating on the supplied stream
-            </summary>
-            <param name="password">The password used for encryption or decryption</param>
-            <param name="stream">The stream to operate on, must be writeable for encryption, and readable for decryption</param>
-            <param name="mode">The mode of operation, either OperationMode.Encrypt or OperationMode.Decrypt</param>
-        </member>
-        <member name="M:SharpAESCrypt.SharpAESCrypt.Read(System.Byte[],System.Int32,System.Int32)">
-            <summary>
-            Reads unencrypted data from the underlying stream
-            </summary>
-            <param name="buffer">The buffer to read data into</param>
-            <param name="offset">The offset into the buffer</param>
-            <param name="count">The number of bytes to read</param>
-            <returns>The number of bytes read</returns>
-        </member>
-        <member name="M:SharpAESCrypt.SharpAESCrypt.Write(System.Byte[],System.Int32,System.Int32)">
-            <summary>
-            Writes unencrypted data into an encrypted stream
-            </summary>
-            <param name="buffer">The data to write</param>
-            <param name="offset">The offset into the buffer</param>
-            <param name="count">The number of bytes to write</param>
-        </member>
-        <member name="M:SharpAESCrypt.SharpAESCrypt.FlushFinalBlock">
-            <summary>
-            Flushes any remaining data to the stream
-            </summary>
-        </member>
-        <member name="M:SharpAESCrypt.SharpAESCrypt.Dispose(System.Boolean)">
-            <summary>
-            Releases all resources used by the instance, and flushes any data currently held, into the stream
-            </summary>
-        </member>
-        <member name="M:SharpAESCrypt.SharpAESCrypt.Main(System.String[])">
-            <summary>
-            Main function, used when compiled as a standalone executable
-            </summary>
-            <param name="args">Commandline arguments</param>
-        </member>
-        <member name="P:SharpAESCrypt.SharpAESCrypt.Crypto">
-            <summary>
-            Helper property to ensure that the crypto stream is initialized before being used
-            </summary>
-        </member>
-        <member name="P:SharpAESCrypt.SharpAESCrypt.Version">
-            <summary>
-            Gets or sets the version number.
-            Note that this can only be set when encrypting, 
-            and must be done before encryption has started.
-            See <value>MAX_FILE_VERSION</value> for the maximum supported version.
-            Note that version 0 requires a seekable stream.
-            </summary>
-        </member>
-        <member name="P:SharpAESCrypt.SharpAESCrypt.Extensions">
-            <summary>
-            Provides access to the extensions found in the file.
-            This collection cannot be updated when decrypting, 
-            nor after the encryption has started.
-            </summary>
-        </member>
         <member name="T:SharpAESCrypt.SharpAESCrypt.SetupHelper">
             <summary>
             Internal helper class used to encapsulate the setup process
+            </summary>
+        </member>
+        <member name="F:SharpAESCrypt.SharpAESCrypt.SetupHelper.DEFAULT_MAC">
+            <summary>
+            The MAC adress to use in case the network interface enumeration fails
             </summary>
         </member>
         <member name="F:SharpAESCrypt.SharpAESCrypt.SetupHelper.HASH_ALGORITHM">
@@ -439,11 +319,6 @@
             The encoding scheme for the password.
             UTF-16 should mean UTF-16LE, but Mono rejects the full name.
             A check is made when using the encoding, that it is indeed UTF-16LE.
-            </summary>
-        </member>
-        <member name="F:SharpAESCrypt.SharpAESCrypt.SetupHelper.DEFAULT_MAC">
-            <summary>
-            The MAC adress to use in case the network interface enumeration fails
             </summary>
         </member>
         <member name="F:SharpAESCrypt.SharpAESCrypt.SetupHelper.m_crypt">
@@ -496,12 +371,17 @@
         </member>
         <member name="M:SharpAESCrypt.SharpAESCrypt.SetupHelper.EncodePassword(System.String)">
             <summary>
-            Encodes the password in UTF-16LE, 
-            used to fix missing support for the full encoding 
+            Encodes the password in UTF-16LE,
+            used to fix missing support for the full encoding
             name under Mono. Verifies that the encoding is correct.
             </summary>
             <param name="password">The password to encode as a byte array</param>
             <returns>The password encoded as a byte array</returns>
+        </member>
+        <member name="P:SharpAESCrypt.SharpAESCrypt.SetupHelper.IV1">
+            <summary>
+            Gets the IV used to encrypt the bulk data key
+            </summary>
         </member>
         <member name="M:SharpAESCrypt.SharpAESCrypt.SetupHelper.GenerateIv1">
             <summary>
@@ -528,7 +408,8 @@
             <summary>
             Generates a random key for encrypting data
             </summary>
-            <returns></returns>
+            <returns>
+            </returns>
         </member>
         <member name="M:SharpAESCrypt.SharpAESCrypt.SetupHelper.EncryptAESKey2">
             <summary>
@@ -540,7 +421,6 @@
             <summary>
             Calculates the HMAC for the encrypted key
             </summary>
-            <param name="data">The encrypted data to calculate the HMAC from</param>
             <returns>The HMAC value</returns>
         </member>
         <member name="M:SharpAESCrypt.SharpAESCrypt.SetupHelper.DigestRandomBytes(System.Byte[],System.Int32)">
@@ -550,7 +430,6 @@
             </summary>
             <param name="bytes">The bytes to start the digest operation with</param>
             <param name="repetitions">The number of repetitions to perform</param>
-            <param name="hash">The hashing algorithm instance</param>
             <returns>The digested input data, which is the same array as passed in</returns>
         </member>
         <member name="M:SharpAESCrypt.SharpAESCrypt.SetupHelper.CreateCryptoStream(SharpAESCrypt.OperationMode)">
@@ -581,12 +460,7 @@
         </member>
         <member name="M:SharpAESCrypt.SharpAESCrypt.SetupHelper.Dispose">
             <summary>
-            Disposes all members 
-            </summary>
-        </member>
-        <member name="P:SharpAESCrypt.SharpAESCrypt.SetupHelper.IV1">
-            <summary>
-            Gets the IV used to encrypt the bulk data key
+            Disposes all members
             </summary>
         </member>
         <member name="T:SharpAESCrypt.SharpAESCrypt.StreamHider">
@@ -619,6 +493,198 @@
             <param name="offset">The offset into the buffer</param>
             <param name="count">The number of bytes to read</param>
             <returns>The number of bytes read</returns>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.RepeatRead(System.IO.Stream,System.Int32)">
+            <summary>
+            Helper function to support reading from streams that chunck data.
+            Will keep reading a stream until <paramref name="count" /> bytes have been read.
+            Throws an exception if the stream is exhausted before <paramref name="count" /> bytes are read.
+            </summary>
+            <param name="stream">The stream to read from</param>
+            <param name="count">The number of bytes to read</param>
+            <returns>The data read</returns>
+        </member>
+        <member name="F:SharpAESCrypt.SharpAESCrypt.Extension_CreatedByIdentifier">
+            <summary>
+            The name inserted as the creator software in the extensions when creating output
+            </summary>
+        </member>
+        <member name="F:SharpAESCrypt.SharpAESCrypt.Extension_InsertCreateByIdentifier">
+            <summary>
+            A value indicating if the extension data should contain the creator software
+            </summary>
+        </member>
+        <member name="F:SharpAESCrypt.SharpAESCrypt.Extension_InsertTimeStamp">
+            <summary>
+            A value indicating if the extensions data should contain timestamp data
+            </summary>
+        </member>
+        <member name="F:SharpAESCrypt.SharpAESCrypt.Extension_InsertPlaceholder">
+            <summary>
+            A value indicating if the extensions data should contain an empty block as suggested by the file format
+            </summary>
+        </member>
+        <member name="F:SharpAESCrypt.SharpAESCrypt.DefaultFileVersion">
+            <summary>
+            The file version to use when creating a new file
+            </summary>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.Encrypt(System.String,System.IO.Stream,System.IO.Stream)">
+            <summary>
+            Encrypts a stream using the supplied password
+            </summary>
+            <param name="password">The password to decrypt with</param>
+            <param name="input">The stream with unencrypted data</param>
+            <param name="output">The encrypted output stream</param>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.Decrypt(System.String,System.IO.Stream,System.IO.Stream)">
+            <summary>
+            Decrypts a stream using the supplied password
+            </summary>
+            <param name="password">The password to encrypt with</param>
+            <param name="input">The stream with encrypted data</param>
+            <param name="output">The unencrypted output stream</param>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.Encrypt(System.String,System.String,System.String)">
+            <summary>
+            Encrypts a file using the supplied password
+            </summary>
+            <param name="password">The password to encrypt with</param>
+            <param name="inputfile">The file with unencrypted data</param>
+            <param name="outputfile">The encrypted output file</param>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.Decrypt(System.String,System.String,System.String)">
+            <summary>
+            Decrypts a file using the supplied password
+            </summary>
+            <param name="password">The password to decrypt with</param>
+            <param name="inputfile">The file with encrypted data</param>
+            <param name="outputfile">The unencrypted output file</param>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.#ctor(System.String,System.IO.Stream,SharpAESCrypt.OperationMode)">
+            <summary>
+            Constructs a new AESCrypt instance, operating on the supplied stream
+            </summary>
+            <param name="password">The password used for encryption or decryption</param>
+            <param name="stream">The stream to operate on, must be writeable for encryption, and readable for decryption</param>
+            <param name="mode">The mode of operation, either OperationMode.Encrypt or OperationMode.Decrypt</param>
+        </member>
+        <member name="P:SharpAESCrypt.SharpAESCrypt.Version">
+            <summary>
+            Gets or sets the version number.
+            Note that this can only be set when encrypting,
+            and must be done before encryption has started.
+            See <value>MAX_FILE_VERSION</value> for the maximum supported version.
+            Note that version 0 requires a seekable stream.
+            </summary>
+        </member>
+        <member name="P:SharpAESCrypt.SharpAESCrypt.Extensions">
+            <summary>
+            Provides access to the extensions found in the file.
+            This collection cannot be updated when decrypting,
+            nor after the encryption has started.
+            </summary>
+        </member>
+        <member name="P:SharpAESCrypt.SharpAESCrypt.CanRead">
+            <summary>
+            Gets a value indicating whether this instance can read.
+            </summary>
+            <value>
+                <c>true</c> if this instance can read; otherwise, <c>false</c>.</value>
+        </member>
+        <member name="P:SharpAESCrypt.SharpAESCrypt.CanSeek">
+            <summary>
+            Gets a value indicating whether this instance can seek.
+            </summary>
+            <value>
+                <c>true</c> if this instance can seek; otherwise, <c>false</c>.</value>
+        </member>
+        <member name="P:SharpAESCrypt.SharpAESCrypt.CanWrite">
+            <summary>
+            Gets a value indicating whether this instance can write.
+            </summary>
+            <value>
+                <c>true</c> if this instance can write; otherwise, <c>false</c>.</value>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.Flush">
+            <Docs>An I/O error occurs.</Docs>
+            <summary>
+            Flush this instance.
+            </summary>
+        </member>
+        <member name="P:SharpAESCrypt.SharpAESCrypt.Length">
+            <summary>
+            Gets the length.
+            </summary>
+            <value>The length.</value>
+        </member>
+        <member name="P:SharpAESCrypt.SharpAESCrypt.Position">
+            <summary>
+            Gets or sets the position.
+            </summary>
+            <value>The position.</value>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.Seek(System.Int64,System.IO.SeekOrigin)">
+            <Docs>The stream does not support seeking, such as if the stream is constructed from a pipe or console output.</Docs>
+            <exception cref="T:System.IO.IOException">An I/O error has occurred.</exception>
+            <attribution license="cc4" from="Microsoft" modified="false">
+            </attribution>
+            <see cref="P:System.IO.Stream.CanSeek">
+            </see>
+            <summary>
+            Seek the specified offset and origin.
+            </summary>
+            <param name="offset">Offset.</param>
+            <param name="origin">Origin.</param>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.SetLength(System.Int64)">
+            <Docs>The stream does not support both writing and seeking, such as if the stream is constructed from a pipe or
+            console output.</Docs>
+            <exception cref="T:System.IO.IOException">An I/O error occurred.</exception>
+            <attribution license="cc4" from="Microsoft" modified="false">
+            </attribution>
+            <para>A stream must support both writing and seeking for SetLength to work.</para>
+            <see cref="P:System.IO.Stream.CanWrite">
+            </see>
+            <see cref="P:System.IO.Stream.CanSeek">
+            </see>
+            <summary>
+            Sets the length.
+            </summary>
+            <param name="value">Value.</param>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.Read(System.Byte[],System.Int32,System.Int32)">
+            <summary>
+            Reads unencrypted data from the underlying stream
+            </summary>
+            <param name="buffer">The buffer to read data into</param>
+            <param name="offset">The offset into the buffer</param>
+            <param name="count">The number of bytes to read</param>
+            <returns>The number of bytes read</returns>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.Write(System.Byte[],System.Int32,System.Int32)">
+            <summary>
+            Writes unencrypted data into an encrypted stream
+            </summary>
+            <param name="buffer">The data to write</param>
+            <param name="offset">The offset into the buffer</param>
+            <param name="count">The number of bytes to write</param>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.FlushFinalBlock">
+            <summary>
+            Flushes any remaining data to the stream
+            </summary>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.Dispose(System.Boolean)">
+            <summary>
+            Releases all resources used by the instance, and flushes any data currently held, into the stream
+            </summary>
+        </member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.Main(System.String[])">
+            <summary>
+            Main function, used when compiled as a standalone executable
+            </summary>
+            <param name="args">Commandline arguments</param>
         </member>
     </members>
 </doc>
