@@ -95,7 +95,14 @@ namespace SharpAESCrypt
         /// <summary>
         /// A string displayed when the program is invoked without the correct number of arguments
         /// </summary>
-        public static string CommandlineUsage = "SharpAESCrypt e|d password fromPath toPath";
+        public static string CommandlineUsage = "SharpAESCrypt e|d <password> [<fromPath>] [<toPath>]" + 
+            Environment.NewLine +
+            Environment.NewLine +
+            "If you ommit the fromPath or toPath, stdin/stdout are used insted, e.g.:" +
+            Environment.NewLine +
+            " SharpAESCrypt e 1234 < file.jpg > file.jpg.aes"
+            ;
+
         /// <summary>
         /// A string displayed when an error occurs while running the commandline program
         /// </summary>
@@ -1319,24 +1326,37 @@ namespace SharpAESCrypt
         /// <param name="args">Commandline arguments</param>
         public static void Main(string[] args)
         {
-			if (args.Length < 4) 
+            if (args.Length < 2)
             {
-				Console.WriteLine(Strings.CommandlineUsage);
-				return;
-			}
+                Console.WriteLine(Strings.CommandlineUsage);
+                return;
+            }
+
+            bool encrypt = args[0].StartsWith("e", StringComparison.InvariantCultureIgnoreCase);
+            bool decrypt = args[0].StartsWith("d", StringComparison.InvariantCultureIgnoreCase);
+#if DEBUG
+
+            if (args[0].StartsWith("u", StringComparison.InvariantCultureIgnoreCase))
+            {
+                Unittest();
+                return;
+            }
+#endif
+
+            if (!(encrypt || decrypt))
+            {
+                Console.WriteLine(Strings.CommandlineUsage);
+                return;
+            }
 
             try
             {
-                if (args[0].StartsWith("e", StringComparison.InvariantCultureIgnoreCase))
-                    Encrypt(args[1], args[2], args[3]);
-                else if (args[0].StartsWith("d", StringComparison.InvariantCultureIgnoreCase))
-                    Decrypt(args[1], args[2], args[3]);
-#if DEBUG
-                else if (args[0].StartsWith("u"))
-                    Unittest();
-#endif
-                else
-                    Console.WriteLine(Strings.CommandlineUnknownMode);
+                using(Stream inputstream = args.Length >= 3 ? File.OpenRead(args[2]) : Console.OpenStandardInput())
+                using(Stream outputstream = args.Length >= 4 ? File.OpenWrite(args[3]) : Console.OpenStandardOutput())
+                    if (encrypt)
+                        Encrypt(args[1], inputstream, outputstream);
+                    else
+                        Decrypt(args[1], inputstream, outputstream);
             }
             catch (Exception ex)
             {
