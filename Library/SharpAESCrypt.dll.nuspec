@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package >
+  <metadata>
+    <id>SharpAESCrypt.dll</id>
+    <version>1.0.0</version>
+    <authors>Kenneth Skovhede</authors>
+    <owners>Kenneth Skovhede</owners>
+    <licenseUrl>https://raw.githubusercontent.com/kenkendk/sharpaescrypt/master/license.txt</licenseUrl>
+    <projectUrl>https://github.com/kenkendk/sharpaescrypt</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>A C# implementation of the AESCrypt library</description>
+    <releaseNotes>Initial NuGet version</releaseNotes>
+    <copyright>Copyright Kenneth Skovhede 2014</copyright>
+    <tags>AES AESCrypt Crypto Encryption</tags>
+    <dependencies />
+  </metadata>
+  <files>
+    <file src="SharpAESCrypt.dll" target="lib/net20" />
+  </files>
+</package>
