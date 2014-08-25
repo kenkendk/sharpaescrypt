@@ -707,7 +707,6 @@ namespace SharpAESCrypt
             /// <summary>
             /// Calculates the HMAC for the encrypted key
             /// </summary>
-            /// <param name="data">The encrypted data to calculate the HMAC from</param>
             /// <returns>The HMAC value</returns>
             public byte[] CalculateKeyHmac()
             {
@@ -722,7 +721,6 @@ namespace SharpAESCrypt
             /// </summary>
             /// <param name="bytes">The bytes to start the digest operation with</param>
             /// <param name="repetitions">The number of repetitions to perform</param>
-            /// <param name="hash">The hashing algorithm instance</param>
             /// <returns>The digested input data, which is the same array as passed in</returns>
             private byte[] DigestRandomBytes(byte[] bytes, int repetitions)
             {
@@ -977,8 +975,8 @@ namespace SharpAESCrypt
         /// Encrypts a file using the supplied password
         /// </summary>
         /// <param name="password">The password to encrypt with</param>
-        /// <param name="input">The file with unencrypted data</param>
-        /// <param name="output">The encrypted output file</param>
+        /// <param name="inputfile">The file with unencrypted data</param>
+        /// <param name="outputfile">The encrypted output file</param>
         public static void Encrypt(string password, string inputfile, string outputfile)
         {
             using (FileStream infs = File.OpenRead(inputfile))
@@ -990,8 +988,8 @@ namespace SharpAESCrypt
         /// Decrypts a file using the supplied password
         /// </summary>
         /// <param name="password">The password to decrypt with</param>
-        /// <param name="input">The file with encrypted data</param>
-        /// <param name="output">The unencrypted output file</param>
+        /// <param name="inputfile">The file with encrypted data</param>
+        /// <param name="outputfile">The unencrypted output file</param>
         public static void Decrypt(string password, string inputfile, string outputfile)
         {
             using (FileStream infs = File.OpenRead(inputfile))
@@ -1103,17 +1101,61 @@ namespace SharpAESCrypt
         }
 
         #region Basic stream implementation stuff, all mapped directly to the cryptostream
+        /// <summary>
+        /// Gets a value indicating whether this instance can read.
+        /// </summary>
+        /// <value><c>true</c> if this instance can read; otherwise, <c>false</c>.</value>
         public override bool CanRead { get { return Crypto.CanRead; } }
+        /// <summary>
+        /// Gets a value indicating whether this instance can seek.
+        /// </summary>
+        /// <value><c>true</c> if this instance can seek; otherwise, <c>false</c>.</value>
         public override bool CanSeek { get { return Crypto.CanSeek; } }
+        /// <summary>
+        /// Gets a value indicating whether this instance can write.
+        /// </summary>
+        /// <value><c>true</c> if this instance can write; otherwise, <c>false</c>.</value>
         public override bool CanWrite { get { return Crypto.CanWrite; } }
+        /// <Docs>An I/O error occurs.</Docs>
+        /// <summary>
+        /// Flush this instance.
+        /// </summary>
         public override void Flush() { Crypto.Flush(); }
+        /// <summary>
+        /// Gets the length.
+        /// </summary>
+        /// <value>The length.</value>
         public override long Length { get { return Crypto.Length; } }
+        /// <summary>
+        /// Gets or sets the position.
+        /// </summary>
+        /// <value>The position.</value>
         public override long Position
         {
             get { return Crypto.Position; }
             set { Crypto.Position = value; }
         }
+        /// <Docs>The stream does not support seeking, such as if the stream is constructed from a pipe or console output.</Docs>
+        /// <exception cref="T:System.IO.IOException">An I/O error has occurred.</exception>
+        /// <attribution license="cc4" from="Microsoft" modified="false"></attribution>
+        /// <see cref="P:System.IO.Stream.CanSeek"></see>
+        /// <summary>
+        /// Seek the specified offset and origin.
+        /// </summary>
+        /// <param name="offset">Offset.</param>
+        /// <param name="origin">Origin.</param>
         public override long Seek(long offset, System.IO.SeekOrigin origin) { return Crypto.Seek(offset, origin); }
+        /// <Docs>The stream does not support both writing and seeking, such as if the stream is constructed from a pipe or
+        /// console output.</Docs>
+        /// <exception cref="T:System.IO.IOException">An I/O error occurred.</exception>
+        /// <attribution license="cc4" from="Microsoft" modified="false"></attribution>
+        /// <para>A stream must support both writing and seeking for SetLength to work.</para>
+        /// <see cref="P:System.IO.Stream.CanWrite"></see>
+        /// <see cref="P:System.IO.Stream.CanSeek"></see>
+        /// <summary>
+        /// Sets the length.
+        /// </summary>
+        /// <param name="value">Value.</param>
         public override void SetLength(long value) { Crypto.SetLength(value); }
         #endregion
 
