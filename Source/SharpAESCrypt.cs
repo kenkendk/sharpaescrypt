@@ -1288,6 +1288,7 @@ namespace SharpAESCrypt
                         m_stream.Flush();
                     }
                 }
+                m_hasFlushedFinalBlock = true;
             }
         }
 
