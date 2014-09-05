@@ -47,7 +47,7 @@ Simply add a reference to SharpAESCrypt.dll, and you can use the static methods 
 
     SharpAESCrypt.Encrypt("password", "inputfile", "outputfile");
     SharpAESCrypt.Decrypt("password", "inputfile", "outputfile");
-    SharpAESCrypt.Decrypt("password", inputStream, outputStream);
+    SharpAESCrypt.Encrypt("password", inputStream, outputStream);
     SharpAESCrypt.Decrypt("password", inputStream, outputStream);
     
 The syntax is for C# but the DLL works with any supported .NET language.
