@@ -1,5 +1,5 @@
 #region Disclaimer / License
-// Copyright (C) 2014, Kenneth Skovhede
+// Copyright (C) 2015, Kenneth Skovhede
 // http://www.hexad.dk, opensource@hexad.dk
 // 
 // This library is free software; you can redistribute it and/or
@@ -38,7 +38,7 @@
  There are simple static functions that you can call:
     SharpAESCrypt.Encrypt("password", "inputfile", "outputfile");
     SharpAESCrypt.Decrypt("password", "inputfile", "outputfile");
-    SharpAESCrypt.Decrypt("password", inputStream, outputStream);
+    SharpAESCrypt.Encrypt("password", inputStream, outputStream);
     SharpAESCrypt.Decrypt("password", inputStream, outputStream);
 
  You can control what headers are emitted using the static 
