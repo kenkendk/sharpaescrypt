@@ -110,7 +110,7 @@ namespace SharpAESCrypt
         /// <summary>
         /// A string displayed if the mode is neither e nor d 
         /// </summary>
-        public static string CommandlineUnknownMode = "Invalid operation, must be (e)crypt or (d)ecrypt";
+        public static string CommandlineUnknownMode = "Invalid operation, must be (e)ncrypt or (d)ecrypt";
         #endregion
 
         #region Exception messages
@@ -1052,16 +1052,16 @@ namespace SharpAESCrypt
 
                 //Setup default extensions
                 if (Extension_InsertCreateByIdentifier)
-                    m_extensions.Add(new KeyValuePair<string, byte[]>("CREATED-BY", System.Text.Encoding.UTF8.GetBytes(Extension_CreatedByIdentifier)));
+                    m_extensions.Add(new KeyValuePair<string, byte[]>("CREATED_BY", System.Text.Encoding.UTF8.GetBytes(Extension_CreatedByIdentifier)));
 
                 if (Extension_InsertTimeStamp)
                 {
-                    m_extensions.Add(new KeyValuePair<string, byte[]>("CREATED-DATE", System.Text.Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("yyyy-MM-dd"))));
-                    m_extensions.Add(new KeyValuePair<string, byte[]>("CREATED-TIME", System.Text.Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("hh-mm-ss"))));
+                    m_extensions.Add(new KeyValuePair<string, byte[]>("CREATED_DATE", System.Text.Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("yyyy-MM-dd"))));
+                    m_extensions.Add(new KeyValuePair<string, byte[]>("CREATED_TIME", System.Text.Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("hh-mm-ss"))));
                 }
 
                 if (Extension_InsertPlaceholder)
-                    m_extensions.Add(new KeyValuePair<string, byte[]>("", new byte[127])); //Suggested extension space
+                    m_extensions.Add(new KeyValuePair<string, byte[]>(String.Empty, new byte[127])); //Suggested extension space
                 
                 //We defer creation of the cryptostream until it is needed, 
                 // so the caller can change version, extensions, etc. 
