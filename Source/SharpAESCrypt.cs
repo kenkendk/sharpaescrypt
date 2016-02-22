@@ -95,12 +95,19 @@ namespace SharpAESCrypt
         /// <summary>
         /// A string displayed when the program is invoked without the correct number of arguments
         /// </summary>
-        public static string CommandlineUsage = "SharpAESCrypt e|d <password> [<fromPath>] [<toPath>]" +
+        public static string CommandlineUsage = "Usage: SharpAESCrypt e|d[o] <password> [<fromPath> [<toPath>]]" +
             Environment.NewLine +
+            Environment.NewLine + "Use 'e' or 'd' to specify operation: encrypt or decrypt." +
+            Environment.NewLine + "Append an 'o' to the operation for optimistic mode. This will skip some tests and leaves partial/invalid files on disk." +
             Environment.NewLine +
-            "If you ommit the fromPath or toPath, stdin/stdout are used insted, e.g.:" +
-            Environment.NewLine +
-            " SharpAESCrypt e 1234 < file.jpg > file.jpg.aes"
+            Environment.NewLine + "If you ommit the fromPath or toPath, stdin/stdout are used insted, e.g.:" +
+            Environment.NewLine + "  SharpAESCrypt e 1234 < file.jpg > file.jpg.aes" +
+            Environment.NewLine + 
+            Environment.NewLine + "Abnormal exit will return an errorlevel above 0 (zero):" +
+            Environment.NewLine + "  4 - Password invalid" +
+            Environment.NewLine + "  3 - HMAC Mismatch / altered data (also invalid password for version 0 files)" +
+            Environment.NewLine + "  2 - Missing input stream / input file not found " +
+            Environment.NewLine + "  1 - Any other cryptographic or IO exception "
             ;
 
         /// <summary>
@@ -111,6 +118,11 @@ namespace SharpAESCrypt
         /// A string displayed if the mode is neither e nor d 
         /// </summary>
         public static string CommandlineUnknownMode = "Invalid operation, must be (e)ncrypt or (d)ecrypt";
+        /// <summary>
+        /// A string displayed on Commandline if input file is not found.
+        /// </summary>
+        public static string CommandlineInputFileNotFound = "Input file not found";
+
         #endregion
 
         #region Exception messages
@@ -353,7 +365,7 @@ namespace SharpAESCrypt
         /// <summary>
         /// Helper function to read and validate the header
         /// </summary>
-        private void ReadEncryptionHeader(string password)
+        private void ReadEncryptionHeader(string password, bool skipFileSizeCheck)
         {
             byte[] tmp = new byte[MAGIC_HEADER.Length + 2];
             if (m_stream.Read(tmp, 0, tmp.Length) != tmp.Length)
@@ -411,7 +423,7 @@ namespace SharpAESCrypt
                 byte[] hmac2 = RepeatRead(m_stream, hmac1.Length);
                 for (int i = 0; i < hmac1.Length; i++)
                     if (hmac1[i] != hmac2[i])
-                        throw new CryptographicException(Strings.InvalidPassword);
+                        throw new WrongPasswordException(Strings.InvalidPassword);
 
                 if (m_stream.CanSeek)
                 {
@@ -434,7 +446,7 @@ namespace SharpAESCrypt
                     m_payloadLength = -1;
             }
 
-            if (m_payloadLength != -1 && (m_payloadLength % BLOCK_SIZE != 0))
+            if (!skipFileSizeCheck && m_payloadLength != -1 && (m_payloadLength % BLOCK_SIZE != 0))
                 throw new CryptographicException(Strings.InvalidFileLength);
         }
 
@@ -1139,6 +1151,22 @@ namespace SharpAESCrypt
 
         #endregion
 
+        #region Public exceptions to signal certain errors
+
+        /// <summary> An exception raised to signal a hash mismatch on decryption </summary>
+        public class HashMismatchException :  CryptographicException
+        {
+            public HashMismatchException(string message) : base(message) { }
+        }
+
+        /// <summary> An exception raised to signal a hash mismatch on decryption </summary>
+        public class WrongPasswordException : CryptographicException
+        {
+            public WrongPasswordException(string message) : base(message) { }
+        }
+
+        #endregion
+
         #region Public static API
 
         #region Default extension control variables
@@ -1190,11 +1218,11 @@ namespace SharpAESCrypt
         /// <param name="password">The password to encrypt with</param>
         /// <param name="input">The stream with encrypted data</param>
         /// <param name="output">The unencrypted output stream</param>
-        public static void Decrypt(string password, Stream input, Stream output)
+        public static void Decrypt(string password, Stream input, Stream output, bool skipFileSizeCheck = false)
         {
             int a;
             byte[] buffer = new byte[1024 * 4];
-            SharpAESCrypt c = new SharpAESCrypt(password, input, OperationMode.Decrypt);
+            SharpAESCrypt c = new SharpAESCrypt(password, input, OperationMode.Decrypt, skipFileSizeCheck);
             while ((a = c.Read(buffer, 0, buffer.Length)) != 0)
                 output.Write(buffer, 0, a);
         }
@@ -1218,22 +1246,24 @@ namespace SharpAESCrypt
         /// <param name="password">The password to decrypt with</param>
         /// <param name="inputfile">The file with encrypted data</param>
         /// <param name="outputfile">The unencrypted output file</param>
-        public static void Decrypt(string password, string inputfile, string outputfile)
+        public static void Decrypt(string password, string inputfile, string outputfile, bool skipFileSizeCheck = false)
         {
             using (FileStream infs = File.OpenRead(inputfile))
             using (FileStream outfs = File.Create(outputfile))
-                Decrypt(password, infs, outfs);
+                Decrypt(password, infs, outfs, skipFileSizeCheck);
         }
         #endregion
 
         #region Public instance API
+
         /// <summary>
         /// Constructs a new AESCrypt instance, operating on the supplied stream
         /// </summary>
         /// <param name="password">The password used for encryption or decryption</param>
         /// <param name="stream">The stream to operate on, must be writeable for encryption, and readable for decryption</param>
         /// <param name="mode">The mode of operation, either OperationMode.Encrypt or OperationMode.Decrypt</param>
-        public SharpAESCrypt(string password, Stream stream, OperationMode mode)
+        /// <param name="skipFileSizeCheck">Skip file size check on seekable streams. For disaster recovery. </param>
+        public SharpAESCrypt(string password, Stream stream, OperationMode mode, bool skipFileSizeCheck = false)
         {
             //Basic input checks
             if (stream == null)
@@ -1278,7 +1308,7 @@ namespace SharpAESCrypt
             else
             {
                 //Read and validate
-                ReadEncryptionHeader(password);
+                ReadEncryptionHeader(password, skipFileSizeCheck);
 
                 m_hmac = m_helper.GetHMAC();
 
@@ -1524,7 +1554,7 @@ namespace SharpAESCrypt
                 byte[] hmac1 = m_hmac.Hash;
                 for (int i = 0; i < hmac1.Length; i++)
                     if (hmac1[i] != hmac2[i])
-                        throw new InvalidDataException(m_version == 0 ? Strings.DataHMACMismatch_v0 : Strings.DataHMACMismatch);
+                        throw new HashMismatchException(m_version == 0 ? Strings.DataHMACMismatch_v0 : Strings.DataHMACMismatch);
             }
 
             if (m_hasReadFooter && m_curBlockBytes == 0 && m_nextBlock != null)
@@ -1645,12 +1675,14 @@ namespace SharpAESCrypt
         {
             if (args.Length < 2)
             {
-                Console.WriteLine(Strings.CommandlineUsage);
+                Environment.ExitCode = 1;
+                Console.Error.WriteLine(Strings.CommandlineUsage);
                 return;
             }
 
             bool encrypt = args[0].StartsWith("e", StringComparison.InvariantCultureIgnoreCase);
             bool decrypt = args[0].StartsWith("d", StringComparison.InvariantCultureIgnoreCase);
+            bool optimisticMode = (args[0].IndexOf("o", StringComparison.InvariantCultureIgnoreCase) >= 0);
 #if DEBUG
 
             if (args[0].StartsWith("u", StringComparison.InvariantCultureIgnoreCase))
@@ -1662,22 +1694,48 @@ namespace SharpAESCrypt
 
             if (!(encrypt || decrypt))
             {
-                Console.WriteLine(Strings.CommandlineUsage);
+                Environment.ExitCode = 1;
+                Console.Error.WriteLine(Strings.CommandlineUnknownMode);
                 return;
             }
 
+            string inputname = (args.Length >= 3) ? args[2] : null;
+            string outputname = (args.Length >= 4) ? args[3] : null;
+
+            if (inputname != null && !File.Exists(inputname))
+            {
+                Environment.ExitCode = 2;
+                Console.Error.WriteLine(Strings.CommandlineInputFileNotFound);
+                return;
+            }
+
+
             try
             {
-                using (Stream inputstream = args.Length >= 3 ? File.OpenRead(args[2]) : Console.OpenStandardInput())
-                using (Stream outputstream = args.Length >= 4 ? File.Create(args[3]) : Console.OpenStandardOutput())
+                using (Stream inputstream = (inputname!=null) ? File.OpenRead(inputname) : Console.OpenStandardInput())
+                using (Stream outputstream = (outputname!=null) ? File.Create(outputname) : Console.OpenStandardOutput())
                     if (encrypt)
                         Encrypt(args[1], inputstream, outputstream);
                     else
-                        Decrypt(args[1], inputstream, outputstream);
+                        Decrypt(args[1], inputstream, outputstream, optimisticMode);
+                Environment.ExitCode = 0;
             }
             catch (Exception ex)
             {
-                Console.WriteLine(string.Format(Strings.CommandlineError, ex.ToString()));
+                if (ex is WrongPasswordException)
+                    Environment.ExitCode = 4;
+                if (ex is HashMismatchException)
+                    Environment.ExitCode = 3;
+                else
+                    Environment.ExitCode = 1;
+
+                Console.Error.WriteLine(string.Format(Strings.CommandlineError, ex.Message));
+                // Delete output file if something went wrong
+                if (!optimisticMode && outputname != null)
+                {
+                    try { File.Delete(outputname); }
+                    catch { }
+                }
             }
         }
 
