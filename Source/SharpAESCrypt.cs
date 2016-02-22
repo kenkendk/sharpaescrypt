@@ -1709,7 +1709,7 @@ namespace SharpAESCrypt
                             byte[] tmp = new byte[i];
                             rnd.NextBytes(tmp);
                             ms.Write(tmp, 0, tmp.Length);
-                           //!! allpass &= Unittest(string.Format("Testing version {0} with length = {1} => ", v, ms.Length), ms, -1);
+                            allpass &= Unittest(string.Format("Testing version {0} with length = {1} => ", v, ms.Length), ms, -1);
                         }
             }
 
