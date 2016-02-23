@@ -1773,7 +1773,7 @@ namespace SharpAESCrypt
                         }
             }
 
-            //Test each supported version with variavle buffer lengths
+            //Test each supported version with variable buffer lengths
             for (byte v = 0; v <= MAX_FILE_VERSION; v++)
             {
                 SharpAESCrypt.DefaultFileVersion = v;
