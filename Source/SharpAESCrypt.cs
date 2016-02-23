@@ -481,7 +481,7 @@ namespace SharpAESCrypt
             m_hmac = m_helper.GetHMAC();
 
             //Insert the HMAC before the stream to calculate the HMAC for the ciphertext
-            m_crypto = new CryptoStream(new CryptoStream(new LeavOpenStream(m_stream), m_hmac, CryptoStreamMode.Write), m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Write);
+            m_crypto = new CryptoStream(new CryptoStream(new LeaveOpenStream(m_stream), m_hmac, CryptoStreamMode.Write), m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Write);
             m_hasWrittenHeader = true;
         }
 
@@ -905,12 +905,12 @@ namespace SharpAESCrypt
         /// <summary>
         /// Internal helper class, used to prevent a overlay stream from closing its base
         /// </summary>
-        private class LeavOpenStream : Stream
+        private class LeaveOpenStream : Stream
         {
             /// <summary> The wrapped stream </summary>
             private Stream m_stream;
 
-            public LeavOpenStream(Stream stream)
+            public LeaveOpenStream(Stream stream)
             { m_stream = stream; }
 
             #region Basic Stream implementation stuff
@@ -1154,12 +1154,14 @@ namespace SharpAESCrypt
         #region Public exceptions to signal certain errors
 
         /// <summary> An exception raised to signal a hash mismatch on decryption </summary>
+        [Serializable]
         public class HashMismatchException :  CryptographicException
         {
             public HashMismatchException(string message) : base(message) { }
         }
 
         /// <summary> An exception raised to signal a hash mismatch on decryption </summary>
+        [Serializable]
         public class WrongPasswordException : CryptographicException
         {
             public WrongPasswordException(string message) : base(message) { }
