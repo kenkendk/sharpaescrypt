@@ -67,6 +67,8 @@ using System.Collections.Generic;
 using System.Text;
 using System.IO;
 using System.Security.Cryptography;
+using System.Threading;
+using SharpAESCrypt.Threading;
 
 namespace SharpAESCrypt
 {
@@ -95,10 +97,11 @@ namespace SharpAESCrypt
         /// <summary>
         /// A string displayed when the program is invoked without the correct number of arguments
         /// </summary>
-        public static string CommandlineUsage = "Usage: SharpAESCrypt e|d[o] <password> [<fromPath> [<toPath>]]" +
+        public static string CommandlineUsage = "Usage: SharpAESCrypt e|d[o][1-4] <password> [<fromPath> [<toPath>]]" +
             Environment.NewLine +
             Environment.NewLine + "Use 'e' or 'd' to specify operation: encrypt or decrypt." +
             Environment.NewLine + "Append an 'o' to the operation for optimistic mode. This will skip some tests and leaves partial/invalid files on disk." +
+            Environment.NewLine + "Append a single number to the operation to set the number of threads used for cryping. Default is single thread mode (1)." +
             Environment.NewLine +
             Environment.NewLine + "If you ommit the fromPath or toPath, stdin/stdout are used insted, e.g.:" +
             Environment.NewLine + "  SharpAESCrypt e 1234 < file.jpg > file.jpg.aes" +
@@ -197,6 +200,10 @@ namespace SharpAESCrypt
         /// </summary>
         public static string VersionReadonly = "Version cannot be changed after encryption has started";
         /// <summary>
+        /// An exception message that indicates that the threading setting is readonly once crypting has started
+        /// </summary>
+        public static string ThreadingReadonly = "Threading mode cannot be changed after crypting has started";
+        /// <summary>
         /// An exception message that indicates that the supplied version number is unsupported
         /// </summary>
         public static string VersionUnsupported = "The maximum allowed version is {0}";
@@ -275,6 +282,9 @@ namespace SharpAESCrypt
         /// The size of the SHA-256 output, which matches the KEY_SIZE
         /// </summary>
         private const int HASH_SIZE = 32;
+        /// <summary> Default number of threads to use </summary>
+        private const int DEFAULT_THREADS = 1;
+
         #endregion
 
         #region Private instance variables
@@ -291,9 +301,14 @@ namespace SharpAESCrypt
         /// </summary>
         private CryptoStream m_crypto;
         /// <summary>
+        /// The cryptostream used to compute the hash
+        /// </summary>
+        private CryptoStream m_hasher;
+        /// <summary>
         /// Helper payload stream for decryption
         /// </summary>
         private StreamHider m_payloadStream;
+        
         /// <summary>
         /// The HMAC used for validating data
         /// </summary>
@@ -314,6 +329,12 @@ namespace SharpAESCrypt
         /// The file format version
         /// </summary>
         private byte m_version = MAX_FILE_VERSION;
+        /// <summary>
+        /// Set number of threads to be used for crypto-operations:
+        /// 1 for no multithreading at all, 2 for separate hashing, > 2 for AES-stream splitting
+        /// </summary>
+        private int m_maxCryptoThreads = DEFAULT_THREADS;
+
         /// <summary>
         /// True if the header is written, false otherwise. Used only for encryption.
         /// </summary>
@@ -345,7 +366,10 @@ namespace SharpAESCrypt
         private byte[] m_curBlock;
         /// <summary> Number of bytes in read-ahead buffer.</summary>
         private int m_curBlockBytes;
-        
+
+        private Stream m_finalCryptoReaderStream; //!! clean code
+        private DirectStreamLink.DataPump m_cryptoThreadPump; //!! clean code
+
         #endregion
 
         #region Private helper functions and properties
@@ -357,8 +381,94 @@ namespace SharpAESCrypt
             get
             {
                 if (m_crypto == null)
-                    WriteEncryptionHeader();
+                {
+                    switch (m_mode)
+                    {
+                        case OperationMode.Encrypt:
+                            WriteEncryptionHeader();
+                            InitStreamsEncryption();
+                            break;
+                        case OperationMode.Decrypt:
+                            InitStreamsDecryption();
+                            break;
+                    }
+                }
                 return m_crypto;
+            }
+        }
+
+
+        private void InitStreamsDecryption()
+        {
+            m_hmac = m_helper.GetHMAC();
+            //Insert the HMAC before the decryption so the HMAC is calculated for the ciphertext
+            m_payloadStream = new StreamHider(m_stream, m_version == 0 ? HASH_SIZE : (HASH_SIZE + 1));
+
+            if (m_maxCryptoThreads > 1)
+            {
+                List<DirectStreamLink.DataPump> dataPumps = new List<DirectStreamLink.DataPump>();
+
+                int useChunkSize = 1 << 16; // MUST be a multiple of BLOCK_SIZE for splitting to work!
+                //if variable: if (useChunkSize % BLOCK_SIZE != 0) throw new Exception();
+
+                int useAesThreads = Math.Min(Environment.ProcessorCount, m_maxCryptoThreads - 1);
+
+                if (useAesThreads > 1) // multiple AES threads: we will split the stream to chunks and have several decoders.
+                {
+                    // First we have to set up all the worker streams:
+                    Stream[] cryptoInputWriters = new Stream[useAesThreads];
+                    Stream[] cryptoOutputReaders = new Stream[useAesThreads];
+                    for (int t = 0; t < useAesThreads; t++)
+                    {
+                        var linkCryptInput = new DirectStreamLink(4 * (useChunkSize + BLOCK_SIZE), false, true, null);
+                        var linkCryptOutput = new DirectStreamLink(4 * (useChunkSize + BLOCK_SIZE), false, true, null);
+                        var cryptoStream = new CryptoStream( linkCryptOutput.WriterStream, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Write);
+                        cryptoInputWriters[t] = linkCryptInput.WriterStream;
+                        cryptoOutputReaders[t] = linkCryptOutput.ReaderStream;
+
+                        // Note: DataPump's bufsize must be smaller than buffer in input stream. Otherwise CryptoReader could block waiting for data
+                        DirectStreamLink.DataPump cryptoPump = 
+                            new DirectStreamLink.DataPump(linkCryptInput.ReaderStream, cryptoStream, (useChunkSize + 1 * BLOCK_SIZE));
+                        dataPumps.Add(cryptoPump);
+
+                        m_crypto = cryptoStream; //! to not break current decoder Flow []
+                    }
+
+                    OverlappedStreamStriper cryptSplitter = new OverlappedStreamStriper(OverlappedStreamStriper.Mode.Split, cryptoInputWriters, useChunkSize, BLOCK_SIZE);
+                    OverlappedStreamStriper decryptJoiner = new OverlappedStreamStriper(OverlappedStreamStriper.Mode.Join, cryptoOutputReaders, useChunkSize, BLOCK_SIZE);
+
+                    m_hasher = new CryptoStream(cryptSplitter, m_hmac, CryptoStreamMode.Write);
+                    DirectStreamLink.DataPump mainPump =
+                        new DirectStreamLink.DataPump(m_payloadStream, m_hasher); //!, closeInputWhenDone: false);
+
+                    dataPumps.Add(mainPump);
+                    m_cryptoThreadPump = mainPump;
+                    
+                    //! RENAME to: PipeEnd
+                    m_finalCryptoReaderStream = decryptJoiner;
+                
+                }
+                else // only single AES thread: plug directly to LinkStream (will run in main thread)
+                {
+                    m_hasher = new CryptoStream(Stream.Null, m_hmac, CryptoStreamMode.Write);
+                    DirectStreamLink linkHasherToCrypto = new DirectStreamLink(1 << 16, false, true, m_hasher);
+                    m_crypto = new CryptoStream(linkHasherToCrypto.ReaderStream, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Read);
+                    m_finalCryptoReaderStream = m_crypto;
+                    DirectStreamLink.DataPump mainPump = 
+                        new DirectStreamLink.DataPump(m_payloadStream, linkHasherToCrypto.WriterStream); //! , closeInputWhenDone: false);
+                    dataPumps.Add(mainPump);
+                    m_cryptoThreadPump = mainPump;
+                }
+
+                // We do not need blocking here: m_hasher works alone, close is separately handled
+                // Start pumping data through our threads
+                foreach (var pump in dataPumps) pump.RunInThreadPool(pump == m_cryptoThreadPump);
+            }
+            else
+            {
+                m_hasher = new CryptoStream(m_payloadStream, m_hmac, CryptoStreamMode.Read);
+                m_crypto = new CryptoStream(m_hasher, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Read);
+                m_finalCryptoReaderStream = m_crypto;
             }
         }
 
@@ -450,6 +560,28 @@ namespace SharpAESCrypt
                 throw new CryptographicException(Strings.InvalidFileLength);
         }
 
+
+        private void InitStreamsEncryption()
+        {
+            m_hmac = m_helper.GetHMAC();
+            //Insert the HMAC before the stream to calculate the HMAC for the ciphertext
+            if (m_maxCryptoThreads > 1)
+            {
+                // We ask DirectLinkStream to block until reader closes and has thus written all
+                // data to m_hasher. m_hasher's close is separately handled
+                DirectStreamLink link = new DirectStreamLink(1 << 16, true, true, new LeaveOpenStream(m_stream));
+                m_crypto = new CryptoStream(link.WriterStream, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Write);
+                m_hasher = new CryptoStream(Stream.Null, m_hmac, CryptoStreamMode.Write);
+                m_cryptoThreadPump = new DirectStreamLink.DataPump(link.ReaderStream, m_hasher, DirectStreamLink.DataPump.DEFAULTBUFSIZE, true, false);
+                m_cryptoThreadPump.RunInThreadPool(true);
+            }
+            else
+            {
+                m_hasher = new CryptoStream(new LeaveOpenStream(m_stream), m_hmac, CryptoStreamMode.Write);
+                m_crypto = new CryptoStream(m_hasher, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Write);
+            }
+        }
+
         /// <summary>
         /// Writes the header to the output stream and sets up the crypto stream
         /// </summary>
@@ -478,10 +610,6 @@ namespace SharpAESCrypt
                 m_stream.Write(tmpKey, 0, tmpKey.Length);
             }
 
-            m_hmac = m_helper.GetHMAC();
-
-            //Insert the HMAC before the stream to calculate the HMAC for the ciphertext
-            m_crypto = new CryptoStream(new CryptoStream(new LeaveOpenStream(m_stream), m_hmac, CryptoStreamMode.Write), m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Write);
             m_hasWrittenHeader = true;
         }
 
@@ -950,6 +1078,12 @@ namespace SharpAESCrypt
             /// </summary>
             private byte[] m_intbuf;
 
+            /// <summary>
+            /// Will store the hidden bytes after eof found.
+            /// This will be kept available after close.
+            /// </summary>
+            private byte[] m_finalHiddenBytes;
+
             /// <summary> size of intbuf </summary>
             private int m_bufsize;
             /// <summary> Total bytes read from intbuf </summary>
@@ -1019,16 +1153,14 @@ namespace SharpAESCrypt
 
                 if (m_eof)
                 {
-                    if (m_written < m_hiddenByteCount)
+                    if (m_finalHiddenBytes == null || m_finalHiddenBytes.Length < m_hiddenByteCount)
                         throw new IOException(Strings.UnexpectedEndOfStream);
 
                     if (count < 0 || offset < 0 || count + offset > m_hiddenByteCount)
                         throw new ArgumentException();
 
-                    m_read = m_written - m_hiddenByteCount;
-                    m_read += offset;
                     byte[] retBytes = new byte[count];
-                    readFromIntBuf(retBytes, 0, count);
+                    Array.Copy(m_finalHiddenBytes, offset, retBytes, 0, count);
                     return retBytes;
                 }
                 else throw new InvalidOperationException(Strings.HiddenBytesNotAvailable);
@@ -1078,6 +1210,19 @@ namespace SharpAESCrypt
                 return count;
             }
 
+            /// <summary> Returns count bytes from the very end of internal buffer. </summary>
+            private byte[] peekLastBytesFromIntBuf(int count)
+            {
+                count = Math.Min(count, (int)(m_written - m_read));
+                byte[] retBytes = new byte[count];
+                long save_curpos = m_read;
+                m_read = m_written - count;
+                readFromIntBuf(retBytes, 0, count);
+                m_read = save_curpos;
+                return retBytes;
+            }
+
+
             /// <summary>
             /// The overridden read function that ensures that the caller cannot see the hidden bytes
             /// </summary>
@@ -1106,7 +1251,12 @@ namespace SharpAESCrypt
                 if (count > 0)
                 {
                     int cnt = readToIntBuf(m_stream);
-                    if (cnt == 0) { count = 0; m_eof = true; }
+                    if (cnt == 0)
+                    {
+                        // to keep the hidden bytes available after Close, we copy to a small buffer
+                        count = 0; m_eof = true;
+                        m_finalHiddenBytes = peekLastBytesFromIntBuf(m_hiddenByteCount);
+                    }
                     else bytesRead += readFromIntBuf(buffer, offset, Math.Min(count, cnt));
                 }
                 return bytesRead;
@@ -1204,11 +1354,13 @@ namespace SharpAESCrypt
         /// <param name="password">The password to decrypt with</param>
         /// <param name="input">The stream with unencrypted data</param>
         /// <param name="output">The encrypted output stream</param>
-        public static void Encrypt(string password, Stream input, Stream output)
+        /// <param name="maxThreads">Maximum threads allowed for SharpAESCrypt. </param>
+        public static void Encrypt(string password, Stream input, Stream output, int maxThreads = DEFAULT_THREADS)
         {
             int a;
             byte[] buffer = new byte[1024 * 4];
             SharpAESCrypt c = new SharpAESCrypt(password, output, OperationMode.Encrypt);
+            if (maxThreads > 0) c.MaxCryptoThreads = maxThreads;
             while ((a = input.Read(buffer, 0, buffer.Length)) != 0)
                 c.Write(buffer, 0, a);
             c.FlushFinalBlock();
@@ -1220,11 +1372,14 @@ namespace SharpAESCrypt
         /// <param name="password">The password to encrypt with</param>
         /// <param name="input">The stream with encrypted data</param>
         /// <param name="output">The unencrypted output stream</param>
-        public static void Decrypt(string password, Stream input, Stream output, bool skipFileSizeCheck = false)
+        /// <param name="skipFileSizeCheck">Will skip file size check on seekable streams to allow partial streams.</param>
+        /// <param name="maxThreads">Maximum threads allowed for SharpAESCrypt. </param>
+        public static void Decrypt(string password, Stream input, Stream output, bool skipFileSizeCheck = false, int maxThreads = DEFAULT_THREADS)
         {
             int a;
             byte[] buffer = new byte[1024 * 4];
             SharpAESCrypt c = new SharpAESCrypt(password, input, OperationMode.Decrypt, skipFileSizeCheck);
+            if (maxThreads > 0) c.MaxCryptoThreads = maxThreads;
             while ((a = c.Read(buffer, 0, buffer.Length)) != 0)
                 output.Write(buffer, 0, a);
         }
@@ -1235,11 +1390,12 @@ namespace SharpAESCrypt
         /// <param name="password">The password to encrypt with</param>
         /// <param name="inputfile">The file with unencrypted data</param>
         /// <param name="outputfile">The encrypted output file</param>
-        public static void Encrypt(string password, string inputfile, string outputfile)
+        /// <param name="maxThreads">Maximum threads allowed for SharpAESCrypt. </param>
+        public static void Encrypt(string password, string inputfile, string outputfile, int maxThreads = DEFAULT_THREADS)
         {
             using (FileStream infs = File.OpenRead(inputfile))
             using (FileStream outfs = File.Create(outputfile))
-                Encrypt(password, infs, outfs);
+                Encrypt(password, infs, outfs, maxThreads);
         }
 
         /// <summary>
@@ -1248,11 +1404,13 @@ namespace SharpAESCrypt
         /// <param name="password">The password to decrypt with</param>
         /// <param name="inputfile">The file with encrypted data</param>
         /// <param name="outputfile">The unencrypted output file</param>
-        public static void Decrypt(string password, string inputfile, string outputfile, bool skipFileSizeCheck = false)
+        /// <param name="skipFileSizeCheck">Will skip file size check on seekable streams to allow partial streams.</param>
+        /// <param name="maxThreads">Maximum threads allowed for SharpAESCrypt. </param>
+        public static void Decrypt(string password, string inputfile, string outputfile, bool skipFileSizeCheck = false, int maxThreads = DEFAULT_THREADS)
         {
             using (FileStream infs = File.OpenRead(inputfile))
             using (FileStream outfs = File.Create(outputfile))
-                Decrypt(password, infs, outfs, skipFileSizeCheck);
+                Decrypt(password, infs, outfs, skipFileSizeCheck, maxThreads);
         }
         #endregion
 
@@ -1312,13 +1470,13 @@ namespace SharpAESCrypt
                 //Read and validate
                 ReadEncryptionHeader(password, skipFileSizeCheck);
 
-                m_hmac = m_helper.GetHMAC();
-
-                //Insert the HMAC before the decryption so the HMAC is calculated for the ciphertext
-                m_payloadStream = new StreamHider(m_stream, m_version == 0 ? HASH_SIZE : (HASH_SIZE + 1));
-                m_crypto = new CryptoStream(new CryptoStream(m_payloadStream, m_hmac, CryptoStreamMode.Read), m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Read);
+                // We defer creation of the cryptostream until it is needed, 
+                // so the caller can change version, extensions, etc. 
+                // before we write the header
+                m_crypto = null;
             }
         }
+
 
         /// <summary>
         /// Gets or sets the version number.
@@ -1344,6 +1502,24 @@ namespace SharpAESCrypt
                 m_version = value;
             }
         }
+
+        /// <summary>
+        /// Gets or sets how many threads may be used for crypto-operation.
+        /// 1 is single thread, 2 dual threads to decouple hashing,
+        /// > 2 multithreads aes (decryption only).
+        /// Note that this must be done before en-/decryption has started.
+        /// </summary>
+        public int MaxCryptoThreads
+        {
+            get { return m_maxCryptoThreads; }
+            set
+            {
+                if (m_crypto != null)
+                    throw new InvalidOperationException(Strings.ThreadingReadonly);
+                m_maxCryptoThreads = value;
+            }
+        }
+
 
         /// <summary>
         /// Provides access to the extensions found in the file.
@@ -1429,6 +1605,8 @@ namespace SharpAESCrypt
         /// <returns>The number of bytes read</returns>
         public override int Read(byte[] buffer, int offset, int count)
         {
+            Stream s = Crypto; //INIT
+
             if (m_mode != OperationMode.Decrypt)
                 throw new InvalidOperationException(Strings.CannotReadWhileEncrypting);
 
@@ -1464,7 +1642,7 @@ namespace SharpAESCrypt
                     count = count - (count % BLOCK_SIZE);
                     int prependBlock = isInit ? 0 : BLOCK_SIZE;
 
-                    int read = ForceRead(Crypto, buffer, offset + prependBlock, count - prependBlock);
+                    int read = ForceRead(m_finalCryptoReaderStream, buffer, offset + prependBlock, count - prependBlock);
                     m_readcount += read;
 
                     if (read % BLOCK_SIZE != 0) throw new InvalidDataException(Strings.UnexpectedEndOfStream);
@@ -1487,7 +1665,7 @@ namespace SharpAESCrypt
                 {
                     // read single next block and switch buffers
 
-                    int read = ForceRead(Crypto, m_curBlock, 0, BLOCK_SIZE);
+                    int read = ForceRead(m_finalCryptoReaderStream, m_curBlock, 0, BLOCK_SIZE);
                     m_readcount += read;
                     if (read % BLOCK_SIZE != 0) throw new InvalidDataException(Strings.UnexpectedEndOfStream);
 
@@ -1497,7 +1675,7 @@ namespace SharpAESCrypt
                         else
                         {
                             byte[] t = m_curBlock; m_curBlock = m_nextBlock; m_nextBlock = t;
-                            read = ForceRead(Crypto, m_curBlock, 0, BLOCK_SIZE);
+                            read = ForceRead(m_finalCryptoReaderStream, m_curBlock, 0, BLOCK_SIZE);
                             m_readcount += read;
                             if (read % BLOCK_SIZE != 0) throw new InvalidDataException(Strings.UnexpectedEndOfStream);
                         }
@@ -1524,6 +1702,13 @@ namespace SharpAESCrypt
 
             if (!m_hasReadFooter && isEOF)
             {
+                // Hack while testing multithreading
+                //if (m_finalCryptoReaderStream != m_crypto)
+                m_finalCryptoReaderStream.Close();
+
+                if (m_cryptoThreadPump != null)
+                    m_cryptoThreadPump.WaitHandle.WaitOne();
+
                 m_hasReadFooter = true;
 
                 if (m_payloadStream.PayloadLength != m_readcount)
@@ -1551,7 +1736,9 @@ namespace SharpAESCrypt
                 //We cannot call FlushFinalBlock directly because it may
                 // have been called by the read operation.
                 byte[] hmac2 = m_payloadStream.GetHiddenBytes(hMacOffset, m_hmac.HashSize / 8);
-                Crypto.Close();
+                if (m_maxCryptoThreads <= 1) Crypto.Close();
+                if (m_maxCryptoThreads <= 1) m_hasher.Close();
+                m_payloadStream.Close();
 
                 byte[] hmac1 = m_hmac.Hash;
                 for (int i = 0; i < hmac1.Length; i++)
@@ -1599,8 +1786,8 @@ namespace SharpAESCrypt
             {
                 if (m_mode == OperationMode.Encrypt)
                 {
-                    if (!m_hasWrittenHeader)
-                        WriteEncryptionHeader();
+                    // Dummy access to make sure the header is written.
+                    Crypto.Write(new byte[0], 0, 0);
 
                     byte lastLen = (byte)(m_length %= BLOCK_SIZE);
 
@@ -1615,8 +1802,30 @@ namespace SharpAESCrypt
 
                     //Not required without padding, but throws exception if the stream is used incorrectly
                     Crypto.FlushFinalBlock();
-                    //The StreamHider makes sure the underlying stream is not closed.
+                    
+                    //The LeaveOpenStrem makes sure the underlying stream is not closed.
                     Crypto.Close();
+
+                    if (m_cryptoThreadPump != null)
+                        m_cryptoThreadPump.WaitHandle.WaitOne();
+
+                    // Note: if dual threaded, The link stream blocks Crypto.Close(); until m_hasher has all bytes.
+                    //       This is why we have to close after Crypte.
+                    m_hasher.Close();
+                    
+                    
+                    //Thread.Sleep(1);
+                    //pass -->Thread FLUSH_WAIT_HANDLE to DataPump!!!
+                    //    OTHERWISE, all data Read, but NOT yet copied ("PUMPED" to other cryptostream)
+                    //Read and PasswordDeriveBytes on exceptions!
+                    // CHECK decrypt streams for blocking!!
+
+                    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
+                    // ANYWAY: checked for Exception in parallel Thread!
+                    //     ADD option for commandline!
+                    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
 
                     byte[] hmac = m_hmac.Hash;
 
@@ -1656,6 +1865,10 @@ namespace SharpAESCrypt
                     m_crypto.Dispose();
                 m_crypto = null;
 
+                if (m_hasher != null)
+                    m_hasher.Dispose();
+                m_hasher = null;
+
                 if (m_stream != null)
                     m_stream.Dispose();
                 m_stream = null;
@@ -1685,6 +1898,12 @@ namespace SharpAESCrypt
             bool encrypt = args[0].StartsWith("e", StringComparison.InvariantCultureIgnoreCase);
             bool decrypt = args[0].StartsWith("d", StringComparison.InvariantCultureIgnoreCase);
             bool optimisticMode = (args[0].IndexOf("o", StringComparison.InvariantCultureIgnoreCase) >= 0);
+
+            int maxThreads = 1;
+            for (int testFor = 1; testFor <= 4; testFor++)
+                if (args[0].IndexOf((char)('0' + testFor)) >= 0) maxThreads = testFor;
+
+
 #if DEBUG
 
             if (args[0].StartsWith("u", StringComparison.InvariantCultureIgnoreCase))
@@ -1717,9 +1936,9 @@ namespace SharpAESCrypt
                 using (Stream inputstream = (inputname!=null) ? File.OpenRead(inputname) : Console.OpenStandardInput())
                 using (Stream outputstream = (outputname!=null) ? File.Create(outputname) : Console.OpenStandardOutput())
                     if (encrypt)
-                        Encrypt(args[1], inputstream, outputstream);
+                        Encrypt(args[1], inputstream, outputstream, maxThreads);
                     else
-                        Decrypt(args[1], inputstream, outputstream, optimisticMode);
+                        Decrypt(args[1], inputstream, outputstream, optimisticMode, maxThreads);
                 Environment.ExitCode = 0;
             }
             catch (Exception ex)
@@ -1757,36 +1976,43 @@ namespace SharpAESCrypt
             Random rnd = new Random();
             Console.WriteLine("Running unittest");
 
-            //Test each supported version
-            for (byte v = 0; v <= MAX_FILE_VERSION; v++)
+            for (int useThreads = 1; useThreads <= 4; useThreads++)
             {
-                SharpAESCrypt.DefaultFileVersion = v;
-                // Test at boundaries and around the block/keysize margins
-                foreach (int bound in new int[] { 1 << 6, 1 << 8, 1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 20 })
-                    for (int i = Math.Max(0, bound - 6 * BLOCK_SIZE - 1); i <= bound + (6 * BLOCK_SIZE + 1); i++)
-                        using (MemoryStream ms = new MemoryStream())
-                        {
-                            byte[] tmp = new byte[i];
-                            rnd.NextBytes(tmp);
-                            ms.Write(tmp, 0, tmp.Length);
-                            allpass &= Unittest(string.Format("Testing version {0} with length = {1} => ", v, ms.Length), ms, -1);
-                        }
-            }
+                //Test each supported version
+                for (byte v = 0; v <= MAX_FILE_VERSION; v++) //!
+                {
+                    SharpAESCrypt.DefaultFileVersion = v;
+                    // Test at boundaries and around the block/keysize margins
+                    foreach (int bound in new int[] { 1 << 6, 1 << 8, 1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 20 })
+                        for (int i = Math.Max(0, bound - 6 * BLOCK_SIZE - 1); i <= bound + (6 * BLOCK_SIZE + 1); i++)
+                            using (MemoryStream ms = new MemoryStream())
+                            {
+                                byte[] tmp = new byte[i];
+                                rnd.NextBytes(tmp);
+                                ms.Write(tmp, 0, tmp.Length);
+                                allpass &= Unittest(string.Format("Testing version {0} with length = {1}, using {2} Thread(s) => ", v, ms.Length, useThreads)
+                                    , ms, -1, useThreads);
+                            }
+                    Console.WriteLine("allpass = {0}", allpass);
+                }
 
-            //Test each supported version with variable buffer lengths
-            for (byte v = 0; v <= MAX_FILE_VERSION; v++)
-            {
-                SharpAESCrypt.DefaultFileVersion = v;
-                // Test at boundaries and around the block/keysize margins
-                foreach (int bound in new int[] { 1 << 6, 1 << 8, 1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 20 })
-                    for (int i = Math.Max(0, bound - 6 * BLOCK_SIZE - 1); i <= bound + (6 * BLOCK_SIZE + 1); i++)
-                        using (MemoryStream ms = new MemoryStream())
-                        {
-                            byte[] tmp = new byte[i];
-                            rnd.NextBytes(tmp);
-                            ms.Write(tmp, 0, tmp.Length);
-                            allpass &= Unittest(string.Format("Testing version {0} with length = {1}, variable buffer sizes => ", v, ms.Length), ms, i + 3);
-                        }
+                //Test each supported version with variavle buffer lengths
+                for (byte v = 0; v <= MAX_FILE_VERSION; v++)
+                {
+                    SharpAESCrypt.DefaultFileVersion = v;
+                    // Test at boundaries and around the block/keysize margins
+                    foreach (int bound in new int[] { 1 << 6, 1 << 8, 1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 20 })
+                        for (int i = Math.Max(0, bound - 6 * BLOCK_SIZE - 1); i <= bound + (6 * BLOCK_SIZE + 1); i++)
+                            using (MemoryStream ms = new MemoryStream())
+                            {
+                                byte[] tmp = new byte[i];
+                                rnd.NextBytes(tmp);
+                                ms.Write(tmp, 0, tmp.Length);
+                                allpass &= Unittest(string.Format("Testing version {0} with length = {1}, using {2} Thread(s) and variable buffer sizes => ",
+                                    v, ms.Length, useThreads), ms, i + 3, useThreads);
+                            }
+                    Console.WriteLine("allpass = {0}", allpass);
+                }
             }
 
             SharpAESCrypt.DefaultFileVersion = MAX_FILE_VERSION;
@@ -1799,7 +2025,9 @@ namespace SharpAESCrypt
                     byte[] tmp = new byte[rnd.Next(MIN_SIZE, MAX_SIZE)];
                     rnd.NextBytes(tmp);
                     ms.Write(tmp, 0, tmp.Length);
-                    allpass |= Unittest(string.Format("Testing bulk {0} of {1} with length = {2} => ", i, REPETIONS, ms.Length), ms, 4096);
+                    int useThreads = (i % 4) + 1;
+                    allpass |= Unittest(string.Format("Testing bulk {0} of {1} with length = {2}, using {3} Thread(s)=> ", i, REPETIONS, ms.Length , useThreads)
+                        , ms, 4096, useThreads);
                 }
             }
 
@@ -1819,9 +2047,10 @@ namespace SharpAESCrypt
         /// </summary>
         /// <param name="message">A message printed to the console</param>
         /// <param name="input">The stream to test with</param>
-        private static bool Unittest(string message, MemoryStream input, int useRndBufSize)
+        private static bool Unittest(string message, MemoryStream input, int useRndBufSize, int useThreads)
         {
             Console.Write(message);
+            DateTime start = DateTime.Now;
 
             const string PASSWORD_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!\"#¤%&/()=?`*'^¨-_.:,;<>|";
             const int MIN_LEN = 1;
@@ -1839,31 +2068,39 @@ namespace SharpAESCrypt
                 using (MemoryStream enc = new MemoryStream())
                 using (MemoryStream dec = new MemoryStream())
                 {
-                    Encrypt(new string(pwdchars), input, enc);
+                    Encrypt(new string(pwdchars), input, enc, maxThreads: useThreads);
                     enc.Position = 0;
+
                     if (useRndBufSize <= 0)
-                        Decrypt(new string(pwdchars), enc, dec);
+                        Decrypt(new string(pwdchars), enc, dec, maxThreads: useThreads);
                     else
-                        UnitStreamDecrypt(new string(pwdchars), enc, dec, useRndBufSize);
+                        UnitStreamDecrypt(new string(pwdchars), enc, dec, useRndBufSize, useThreads);
 
                     dec.Position = 0;
                     input.Position = 0;
 
                     if (dec.Length != input.Length)
-                        throw new Exception(string.Format("Length differ {0} vs {1}", dec.Length, input.Length));
+                        throw new ApplicationException(string.Format("Length differ {0} vs {1}", dec.Length, input.Length));
 
                     for (int i = 0; i < dec.Length; i++)
                         if (dec.ReadByte() != input.ReadByte())
-                            throw new Exception(string.Format("Streams differ at byte {0}", i));
+                            throw new ApplicationException(string.Format("Streams differ at byte {0}", i));
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine("FAILED: " + ex.Message);
+                string consMsg = string.Format("FAILED: {0}", ex.Message);
+                Console.WriteLine(consMsg);
+                // Write a message with detailed error info to err_out. this can be redirected to a file.
+                Console.Error.WriteLine("{0}{1}{2}\r\n", message, consMsg,
+                    (ex is ApplicationException) ? "" : "\r\n" + ex.ToString());
+
                 return false;
             }
 
-            Console.WriteLine("OK!");
+            TimeSpan dur = DateTime.Now - start;
+
+            Console.WriteLine("OK! [{0:N0} ms, Throughput {1:N1} MB/s]", dur.TotalMilliseconds, input.Length / dur.TotalSeconds / (1024 * 1024));
             return true;
         }
 
@@ -1872,11 +2109,11 @@ namespace SharpAESCrypt
         /// <summary>
         /// For Unit testing: Decrypt a stream using the supplied password with changing (small) buffer sizes
         /// </summary>
-        private static void UnitStreamDecrypt(string password, Stream input, Stream output, int bufferSizeSelect)
+        private static void UnitStreamDecrypt(string password, Stream input, Stream output, int bufferSizeSelect, int useThreads)
         {
             Random r = new Random();
 
-            int partBufs = Math.Min(bufferSizeSelect, 1024);
+            int partBufs = Math.Min(bufferSizeSelect, 256);
 
             byte[][] buffer = new byte[partBufs][];
             for (int bs = 1; bs < partBufs; bs++)
@@ -1886,16 +2123,20 @@ namespace SharpAESCrypt
 
             int a;
             SharpAESCrypt c = new SharpAESCrypt(password, input, OperationMode.Decrypt);
+            c.MaxCryptoThreads = useThreads;
             do
             {
                 int bufLen = r.Next(bufferSizeSelect) + 1;
                 byte[] useBuf = bufLen < partBufs ? buffer[bufLen] : buffer[0];
-                a = c.Read(useBuf, 0, bufLen);
-                output.Write(useBuf, 0, a);
+                int useOffset = r.Next(useBuf.Length - bufLen + 1);
+                a = c.Read(useBuf, useOffset, bufLen);
+                output.Write(useBuf, useOffset, a);
             } while (a != 0);
         }
 
 #endif
         #endregion
+
     }
+
 }
