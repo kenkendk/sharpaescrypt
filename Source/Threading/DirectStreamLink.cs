@@ -277,6 +277,7 @@ namespace SharpAESCrypt.Threading
         {
             lock (m_lock)
             {
+                if (m_readerClosed) return;
                 m_readerClosed = true;
                 m_signalBufferAvailable.Set(); // unblock potentially waiting writer
                 m_readerStream = null;
@@ -288,14 +289,15 @@ namespace SharpAESCrypt.Threading
 
         private void writerClosed()
         {
-            flush();
-
             lock (m_lock)
             {
+                if (m_writerClosed) return;
                 m_writerClosed = true;
                 m_signalDataAvailable.Set(); // unblock potentially waiting reader
                 m_writerStream = null;
             }
+
+            flush();
 
             // we close m_passWriteThrough before blocking, so if at end of chain (stacked DirectStreamLinks) 
             // a blocked reader is waiting, it can proceed sooner.
@@ -449,7 +451,7 @@ namespace SharpAESCrypt.Threading
             /// <param name="bufsize"> The internal buffer size for reading/writing. </param>
             /// <param name="callbackFinalizePumping"> A callback to issue when pumping is done but before streams are closed. e.g. Can add data to output. </param>
             /// <param name="dontCloseInputWhenDone"> Disable auto close of input stream when pumping is done. </param>
-            /// <param name="dontCloseInputWhenDone"> Disable auto close of output stream when pumping is done. </param>
+            /// <param name="dontCloseOutputWhenDone"> Disable auto close of output stream when pumping is done. </param>
             public DataPump(Stream input, Stream output, int bufsize = DEFAULTBUFSIZE
                 , Action<DataPump> callbackFinalizePumping = null
                 , bool dontCloseInputWhenDone = false, bool dontCloseOutputWhenDone = false)
