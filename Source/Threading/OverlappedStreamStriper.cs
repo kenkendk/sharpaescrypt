@@ -1,4 +1,4 @@
-﻿#region Disclaimer / License
+#region Disclaimer / License
 /*************************************************************
  * Copyright (C) 2016, Stefan Lück
  * 
