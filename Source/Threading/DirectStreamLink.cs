@@ -1,4 +1,4 @@
-﻿#region Disclaimer / License
+#region Disclaimer / License
 /*************************************************************
  * Copyright (C) 2016, Stefan Lück
  * 
@@ -159,7 +159,7 @@ namespace SharpAESCrypt.Threading
         }
 
         /// <summary> Read bytes from the Pipe. Blocks if none available. Redirected from ReaderStream. </summary>
-        public int Read(byte[] buffer, int offset, int count)
+        private int read(byte[] buffer, int offset, int count)
         {
             int bytesRead = 0;
             while (count > 0)
@@ -206,7 +206,7 @@ namespace SharpAESCrypt.Threading
         }
 
         /// <summary> Write bytes to the Pipe. Blocks if buffer full. Redirected from WriterStream. </summary>
-        public void Write(byte[] buffer, int offset, int count)
+        private void write(byte[] buffer, int offset, int count)
         {
             int orgOffset = offset, orgCount = count;
             while (count > 0)
@@ -253,7 +253,7 @@ namespace SharpAESCrypt.Threading
                 m_passWriteThrough.Write(buffer, orgOffset, orgCount);
         }
 
-        public void Flush()
+        private void flush()
         {
             if (m_passWriteThrough != null)
                 m_passWriteThrough.Flush();
@@ -273,7 +273,7 @@ namespace SharpAESCrypt.Threading
             }
         }
 
-        public void ReaderClosed()
+        private void readerClosed()
         {
             lock (m_lock)
             {
@@ -286,9 +286,9 @@ namespace SharpAESCrypt.Threading
                 this.Dispose();
         }
 
-        public void WriterClosed()
+        private void writerClosed()
         {
-            Flush();
+            flush();
 
             lock (m_lock)
             {
@@ -318,6 +318,7 @@ namespace SharpAESCrypt.Threading
                 this.Dispose();
         }
 
+        /// <summary> Disposes class. Is triggered automatically as soon as reader and writer are closed. </summary>
         public void Dispose()
         {
             lock (m_lock)
@@ -332,6 +333,7 @@ namespace SharpAESCrypt.Threading
 
         #region HelperClasses: Reader, Writer and a DataPump
 
+        /// <summary> Common base class for reader and writer. </summary>
         private abstract class LinkedSubStream : Stream
         {
             protected DirectStreamLink m_linkStream;
@@ -346,7 +348,8 @@ namespace SharpAESCrypt.Threading
             public override long Length { get { if (m_linkStream.m_knownLength >= 0) return m_linkStream.m_knownLength; else throw new NotSupportedException(); } }
 
             // We fake Seek and Position to at least support dummy operations.
-            // That mitigates something like like setting Position = 0 on start.
+            // That mitigates some things like setting Position = 0 on start
+            // and if callers rely on Position instead of counting themselves.
             public override long Seek(long offset, SeekOrigin origin)
             {
                 switch (origin)
@@ -363,6 +366,7 @@ namespace SharpAESCrypt.Threading
         }
 
 
+        /// <summary> The class for readig from DirectStreamLink. </summary>
         private class LinkedReaderStream : LinkedSubStream
         {
             public LinkedReaderStream(DirectStreamLink linkStream)
@@ -375,20 +379,20 @@ namespace SharpAESCrypt.Threading
                 set { throw new NotSupportedException(); }
             }
             public override int Read(byte[] buffer, int offset, int count)
-            { return m_linkStream.Read(buffer, offset, count); }
+            { return m_linkStream.read(buffer, offset, count); }
             public override void Write(byte[] buffer, int offset, int count)
             { throw new NotSupportedException(); }
 
             protected override void Dispose(bool disposing)
             {
-                m_linkStream.ReaderClosed();
+                m_linkStream.readerClosed();
                 base.Dispose(disposing);
             }
-            public override void Flush()
-            { }
+            public override void Flush() { }
 
         }
 
+        /// <summary> The class for writing to DirectStreamLink. </summary>
         private class LinkedWriterStream : LinkedSubStream
         {
             public LinkedWriterStream(DirectStreamLink linkStream)
@@ -404,14 +408,13 @@ namespace SharpAESCrypt.Threading
             public override int Read(byte[] buffer, int offset, int count)
             { throw new NotSupportedException(); }
             public override void Write(byte[] buffer, int offset, int count)
-            { m_linkStream.Write(buffer, offset, count); }
+            { m_linkStream.write(buffer, offset, count); }
             protected override void Dispose(bool disposing)
             {
-                m_linkStream.WriterClosed();
+                m_linkStream.writerClosed();
                 base.Dispose(disposing);
             }
-            public override void Flush()
-            { m_linkStream.Flush(); }
+            public override void Flush() { m_linkStream.flush(); }
 
         }
 
@@ -424,12 +427,15 @@ namespace SharpAESCrypt.Threading
         /// </summary>
         public class DataPump
         {
+            /// <summary> Minimum buffer size for pumping </summary>
             public const int MINBUFSIZE = 1 << 10; // 1K
-            public const int DEFAULTBUFSIZE = 1 << 16; // 64K
+            /// <summary> Default buffer size for pumping </summary>
+            public const int DEFAULTBUFSIZE = 1 << 14; // 16K
 
-            private int m_bufsize;
+            private readonly  int m_bufsize;
+            private readonly bool m_closeInputWhenDone, m_closeOutputWhenDone;
+            private readonly Action<DataPump> m_callbackFinalizePumping = null;
             private Stream m_input, m_output;
-            private bool m_closeInputWhenDone, m_closeOutputWhenDone;
 
             private long m_count = 0;
             private volatile bool m_isRunning = false;
@@ -437,15 +443,23 @@ namespace SharpAESCrypt.Threading
             private Exception m_failedWithException = null;
             private ManualResetEvent m_signalWhenDone = null;
 
-
-            public DataPump(Stream input, Stream output, int bufsize = DEFAULTBUFSIZE,
-                bool closeInputWhenDone = true, bool closeOutputWhenDone = true)
+            /// <summary> Creates and configures a new DataPump instance. </summary>
+            /// <param name="input"> The stream to read data from. </param>
+            /// <param name="output"> The stream to write data to. </param>
+            /// <param name="bufsize"> The internal buffer size for reading/writing. </param>
+            /// <param name="callbackFinalizePumping"> A callback to issue when pumping is done but before streams are closed. e.g. Can add data to output. </param>
+            /// <param name="dontCloseInputWhenDone"> Disable auto close of input stream when pumping is done. </param>
+            /// <param name="dontCloseInputWhenDone"> Disable auto close of output stream when pumping is done. </param>
+            public DataPump(Stream input, Stream output, int bufsize = DEFAULTBUFSIZE
+                , Action<DataPump> callbackFinalizePumping = null
+                , bool dontCloseInputWhenDone = false, bool dontCloseOutputWhenDone = false)
             {
                 this.m_input = input;
                 this.m_output = output;
                 this.m_bufsize = Math.Max(MINBUFSIZE, bufsize);
-                this.m_closeInputWhenDone = closeInputWhenDone;
-                this.m_closeOutputWhenDone = closeOutputWhenDone;
+                this.m_callbackFinalizePumping = callbackFinalizePumping;
+                this.m_closeInputWhenDone = !dontCloseInputWhenDone;
+                this.m_closeOutputWhenDone = !dontCloseOutputWhenDone;
             }
 
             /// <summary> Returns number of bytes currently transferred. </summary>
@@ -503,6 +517,12 @@ namespace SharpAESCrypt.Threading
                         m_output.Write(buf, 0, c);
                         System.Threading.Interlocked.Add(ref m_count, c);
                     }
+
+                    if (m_callbackFinalizePumping != null)
+                    {
+                        try { m_callbackFinalizePumping(this); }
+                        catch { }
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -522,7 +542,6 @@ namespace SharpAESCrypt.Threading
                     catch { }
 
                     m_input = m_output = null;
-
                     m_failedWithException = hadException;
                     m_isRunning = false;
                     if (m_signalWhenDone != null)
