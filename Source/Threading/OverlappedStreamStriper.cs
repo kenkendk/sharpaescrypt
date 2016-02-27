@@ -84,6 +84,7 @@ namespace SharpAESCrypt.Threading
             /// by the handler will actually be written to the stream.
             /// </summary>
             public readonly byte[] OverlapOnNext;
+            /// <summary> Sets up an instance of OverlappedBlockChangingEventArgs </summary>
             public OverlappedBlockChangingEventArgs(Stream prevStream, Stream nextStream, byte[] prevOvl, byte[] nextOvl)
             {
                 this.PreviousStream = prevStream; this.NextStream = nextStream;
@@ -154,6 +155,7 @@ namespace SharpAESCrypt.Threading
             this.m_currentStream = 0;
         }
 
+        /// <summary> Internally handles OverlappedBlockChanging and raises event.  </summary>
         protected void OnOverlappedBlockChanging(byte[] nextChunkOverlap)
         {
             if (OverlappedBlockChanging != null)
@@ -175,22 +177,32 @@ namespace SharpAESCrypt.Threading
             { m_currentStream = next; return true; }
             return false;
         }
-
+        
+        /// <summary> Returns whether this instance is suitable for reading (Join mode). </summary>
         public override bool CanRead { get { return m_mode == Mode.Join; } }
+        /// <summary> Returns whether this instance is suitable for writing (Split mode). </summary>
         public override bool CanWrite { get { return m_mode == Mode.Split; } }
+        /// <summary> Always false, OverlappedStreamStriper cannot seek. </summary>
         public override bool CanSeek { get { return false; } }
+        /// <summary> Flushes all stripe streams. </summary>
         public override void Flush() { for (int i = 0; i < streamCount; i++) m_stripeStreams[(m_currentStream + i + 1) % streamCount].Flush(); }
+        /// <summary> Always throws NotSupportedException. </summary>
         public override long Length { get { throw new NotSupportedException(); } }
+        /// <summary> Always throws NotSupportedException. </summary>
         public override long Position
         {
             get { throw new NotSupportedException(); }
             set { throw new NotSupportedException(); }
         }
+        /// <summary> Always throws NotSupportedException. </summary>
         public override long Seek(long offset, SeekOrigin origin) { throw new NotSupportedException(); }
+        /// <summary> Always throws NotSupportedException. </summary>
         public override void SetLength(long value) { throw new NotSupportedException(); }
 
+        /// <summary> Read from stripes. </summary>
         public override int Read(byte[] buffer, int offset, int count)
         {
+            if (m_mode != Mode.Join) throw new InvalidOperationException();
             int br = 0;
             int c = -1;
             while (count > 0 && c != 0)
@@ -226,8 +238,11 @@ namespace SharpAESCrypt.Threading
         }
 
 
+        /// <summary> Write to stripes. </summary>
         public override void Write(byte[] buffer, int offset, int count)
         {
+            if (m_mode != Mode.Join) throw new InvalidOperationException();
+
             while (count > 0)
             {
                 int chunkoffset = (int)(m_bytesProcessed % m_chunksize);
@@ -256,6 +271,7 @@ namespace SharpAESCrypt.Threading
             }
         }
 
+        /// <summary> Disposes striper and closes all stripe streams through thread pool. </summary>
         protected override void Dispose(bool disposing)
         {
             int streamsToClose = streamCount;
