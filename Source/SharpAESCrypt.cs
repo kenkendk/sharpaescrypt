@@ -101,7 +101,7 @@ namespace SharpAESCrypt
             Environment.NewLine +
             Environment.NewLine + "Use 'e' or 'd' to specify operation: encrypt or decrypt." +
             Environment.NewLine + "Append an 'o' to the operation for optimistic mode. This will skip some tests and leaves partial/invalid files on disk." +
-            Environment.NewLine + "Append a single number to the operation to set the number of threads used for cryping. Default is single thread mode (1)." +
+            Environment.NewLine + "Append a single number (up to 4) to the operation to set the number of threads used for crypting. Default is single thread mode (1)." +
             Environment.NewLine +
             Environment.NewLine + "If you ommit the fromPath or toPath, stdin/stdout are used insted, e.g.:" +
             Environment.NewLine + "  SharpAESCrypt e 1234 < file.jpg > file.jpg.aes" +
@@ -297,17 +297,20 @@ namespace SharpAESCrypt
         /// </summary>
         private OperationMode m_mode;
         /// <summary>
-        /// The cryptostream used to perform bulk encryption
-        /// </summary>
-        private CryptoStream m_crypto;
-        /// <summary>
-        /// The cryptostream used to compute the hash
-        /// </summary>
-        private CryptoStream m_hasher;
-        /// <summary>
-        /// Helper payload stream for decryption
+        /// Helper payload stream for decryption, hiding bytes
         /// </summary>
         private StreamHider m_payloadStream;
+
+        /// <summary>
+        /// Top of stack / end of pipe stream performing crypt operation.
+        /// Actual Type depends on threading mode.
+        /// </summary>
+        private Stream m_cryptDataStream;
+        /// <summary>
+        /// The main (first tier) DataPump when multi-threading (null otherwise).
+        /// Used for synchronization and exception detection.
+        /// </summary>
+        private DirectStreamLink.DataPump m_cryptoThreadPump;
         
         /// <summary>
         /// The HMAC used for validating data
@@ -344,10 +347,6 @@ namespace SharpAESCrypt
         /// </summary>
         private bool m_hasFlushedFinalBlock = false;
         /// <summary>
-        /// The size of the payload, including padding. Used only for decryption.
-        /// </summary>
-        private long m_payloadLength;
-        /// <summary>
         /// The number of bytes read from the encrypted stream. Used only for decryption.
         /// </summary>
         private long m_readcount;
@@ -367,20 +366,17 @@ namespace SharpAESCrypt
         /// <summary> Number of bytes in read-ahead buffer.</summary>
         private int m_curBlockBytes;
 
-        private Stream m_finalCryptoReaderStream; //!! clean code
-        private DirectStreamLink.DataPump m_cryptoThreadPump; //!! clean code
-
         #endregion
 
         #region Private helper functions and properties
         /// <summary>
         /// Helper property to ensure that the crypto stream is initialized before being used
         /// </summary>
-        private CryptoStream Crypto
+        private Stream Crypto
         {
             get
             {
-                if (m_crypto == null)
+                if (m_cryptDataStream == null)
                 {
                     switch (m_mode)
                     {
@@ -393,11 +389,11 @@ namespace SharpAESCrypt
                             break;
                     }
                 }
-                return m_crypto;
+                return m_cryptDataStream;
             }
         }
 
-
+        /// <summary> Init streams for decryption. Simple stack for single thread. For multithreading, sets up pipes and runs data pumps. </summary>
         private void InitStreamsDecryption()
         {
             m_hmac = m_helper.GetHMAC();
@@ -406,15 +402,21 @@ namespace SharpAESCrypt
 
             if (m_maxCryptoThreads > 1)
             {
-                List<DirectStreamLink.DataPump> dataPumps = new List<DirectStreamLink.DataPump>();
-
-                int useChunkSize = 1 << 16; // MUST be a multiple of BLOCK_SIZE for splitting to work!
-                //if variable: if (useChunkSize % BLOCK_SIZE != 0) throw new Exception();
-
                 int useAesThreads = Math.Min(Environment.ProcessorCount, m_maxCryptoThreads - 1);
+                List<DirectStreamLink.DataPump> dataPumps = new List<DirectStreamLink.DataPump>();
 
                 if (useAesThreads > 1) // multiple AES threads: we will split the stream to chunks and have several decoders.
                 {
+                    // Make sure there are enough threads available in threadpool (we work blocking, so otherwise it takes time to trigger start of new pool threads).
+                    // This is important because of the Close() operations in StreamStriper. This will stall for 0,5 secs per thread on first iteration.
+                    int cWorker, cIO;
+                    ThreadPool.GetMinThreads(out cWorker, out cIO);
+                    if (cWorker < 4 + 3 * (useAesThreads + 1))
+                        ThreadPool.SetMinThreads(4 + 3 * (useAesThreads + 1), cIO);
+
+                    int useChunkSize = 1 << 14; // MUST be a multiple of BLOCK_SIZE for splitting to work!
+                    //if modifiable, check: if (useChunkSize % BLOCK_SIZE != 0) throw new Exception();
+
                     // First we have to set up all the worker streams:
                     Stream[] cryptoInputWriters = new Stream[useAesThreads];
                     Stream[] cryptoOutputReaders = new Stream[useAesThreads];
@@ -430,45 +432,33 @@ namespace SharpAESCrypt
                         DirectStreamLink.DataPump cryptoPump = 
                             new DirectStreamLink.DataPump(linkCryptInput.ReaderStream, cryptoStream, (useChunkSize + 1 * BLOCK_SIZE));
                         dataPumps.Add(cryptoPump);
-
-                        m_crypto = cryptoStream; //! to not break current decoder Flow []
                     }
 
                     OverlappedStreamStriper cryptSplitter = new OverlappedStreamStriper(OverlappedStreamStriper.Mode.Split, cryptoInputWriters, useChunkSize, BLOCK_SIZE);
                     OverlappedStreamStriper decryptJoiner = new OverlappedStreamStriper(OverlappedStreamStriper.Mode.Join, cryptoOutputReaders, useChunkSize, BLOCK_SIZE);
 
-                    m_hasher = new CryptoStream(cryptSplitter, m_hmac, CryptoStreamMode.Write);
-                    DirectStreamLink.DataPump mainPump =
-                        new DirectStreamLink.DataPump(m_payloadStream, m_hasher); //!, closeInputWhenDone: false);
-
-                    dataPumps.Add(mainPump);
-                    m_cryptoThreadPump = mainPump;
-                    
-                    //! RENAME to: PipeEnd
-                    m_finalCryptoReaderStream = decryptJoiner;
+                    CryptoStream hasher = new CryptoStream(cryptSplitter, m_hmac, CryptoStreamMode.Write);
+                    m_cryptDataStream = decryptJoiner;
+                    m_cryptoThreadPump = new DirectStreamLink.DataPump(m_payloadStream, hasher);
                 
                 }
                 else // only single AES thread: plug directly to LinkStream (will run in main thread)
                 {
-                    m_hasher = new CryptoStream(Stream.Null, m_hmac, CryptoStreamMode.Write);
-                    DirectStreamLink linkHasherToCrypto = new DirectStreamLink(1 << 16, false, true, m_hasher);
-                    m_crypto = new CryptoStream(linkHasherToCrypto.ReaderStream, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Read);
-                    m_finalCryptoReaderStream = m_crypto;
-                    DirectStreamLink.DataPump mainPump = 
-                        new DirectStreamLink.DataPump(m_payloadStream, linkHasherToCrypto.WriterStream); //! , closeInputWhenDone: false);
-                    dataPumps.Add(mainPump);
-                    m_cryptoThreadPump = mainPump;
+                    CryptoStream hasher = new CryptoStream(Stream.Null, m_hmac, CryptoStreamMode.Write);
+                    DirectStreamLink linkHasherToCrypto = new DirectStreamLink(1 << 16, false, true, hasher);
+                    m_cryptDataStream = new CryptoStream(linkHasherToCrypto.ReaderStream, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Read);
+                    m_cryptoThreadPump = new DirectStreamLink.DataPump(m_payloadStream, linkHasherToCrypto.WriterStream);
                 }
 
-                // We do not need blocking here: m_hasher works alone, close is separately handled
                 // Start pumping data through our threads
-                foreach (var pump in dataPumps) pump.RunInThreadPool(pump == m_cryptoThreadPump);
+                m_cryptoThreadPump.RunInThreadPool(true); // with WaitHandle for synchronization
+                foreach (var pump in dataPumps) pump.RunInThreadPool(false); //no WaitHandles, synched through DirectStreamLink
             }
             else
             {
-                m_hasher = new CryptoStream(m_payloadStream, m_hmac, CryptoStreamMode.Read);
-                m_crypto = new CryptoStream(m_hasher, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Read);
-                m_finalCryptoReaderStream = m_crypto;
+                CryptoStream hasher = new CryptoStream(m_payloadStream, m_hmac, CryptoStreamMode.Read);
+                m_cryptDataStream = new CryptoStream(hasher, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Read);
+                m_cryptoThreadPump = null;
             }
         }
 
@@ -527,6 +517,7 @@ namespace SharpAESCrypt
             byte[] iv1 = RepeatRead(m_stream, IV_SIZE);
             m_helper = new SetupHelper(m_mode, password, iv1);
 
+            long payloadLength = -1;
             if (m_version >= 1)
             {
                 byte[] hmac1 = m_helper.DecryptAESKey2(RepeatRead(m_stream, IV_SIZE + KEY_SIZE));
@@ -537,11 +528,9 @@ namespace SharpAESCrypt
 
                 if (m_stream.CanSeek)
                 {
-                    try { m_payloadLength = m_stream.Length - m_stream.Position - (HASH_SIZE + 1); }
-                    catch { m_payloadLength = -1; }
+                    try { payloadLength = m_stream.Length - m_stream.Position - (HASH_SIZE + 1); }
+                    catch { payloadLength = -1; }
                 }
-                else
-                    m_payloadLength = -1;
             }
             else
             {
@@ -549,18 +538,17 @@ namespace SharpAESCrypt
 
                 if (m_stream.CanSeek)
                 {
-                    try { m_payloadLength = m_stream.Length - m_stream.Position - HASH_SIZE; }
-                    catch { m_payloadLength = -1; }
+                    try { payloadLength = m_stream.Length - m_stream.Position - HASH_SIZE; }
+                    catch { payloadLength = -1; }
                 }
-                else
-                    m_payloadLength = -1;
             }
 
-            if (!skipFileSizeCheck && m_payloadLength != -1 && (m_payloadLength % BLOCK_SIZE != 0))
+            if (!skipFileSizeCheck && payloadLength != -1 && (payloadLength % BLOCK_SIZE != 0))
                 throw new CryptographicException(Strings.InvalidFileLength);
         }
 
 
+        /// <summary> Init streams for encryption. Simple stack for single thread. For multithreading, sets up a pipe and runs data pump. </summary>
         private void InitStreamsEncryption()
         {
             m_hmac = m_helper.GetHMAC();
@@ -570,16 +558,18 @@ namespace SharpAESCrypt
                 // We ask DirectLinkStream to block until reader closes and has thus written all
                 // data to m_hasher. m_hasher's close is separately handled
                 DirectStreamLink link = new DirectStreamLink(1 << 16, true, true, new LeaveOpenStream(m_stream));
-                m_crypto = new CryptoStream(link.WriterStream, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Write);
-                m_hasher = new CryptoStream(Stream.Null, m_hmac, CryptoStreamMode.Write);
-                m_cryptoThreadPump = new DirectStreamLink.DataPump(link.ReaderStream, m_hasher, DirectStreamLink.DataPump.DEFAULTBUFSIZE, true, false);
-                m_cryptoThreadPump.RunInThreadPool(true);
+                m_cryptDataStream = new CryptoStream(link.WriterStream, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Write);
+                CryptoStream hasher = new CryptoStream(Stream.Null, m_hmac, CryptoStreamMode.Write);
+                m_cryptoThreadPump = new DirectStreamLink.DataPump(link.ReaderStream, hasher);
+                m_cryptoThreadPump.RunInThreadPool(true);  // with WaitHandle for synchronization
             }
             else
             {
-                m_hasher = new CryptoStream(new LeaveOpenStream(m_stream), m_hmac, CryptoStreamMode.Write);
-                m_crypto = new CryptoStream(m_hasher, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Write);
+                CryptoStream hasher = new CryptoStream(new LeaveOpenStream(m_stream), m_hmac, CryptoStreamMode.Write);
+                m_cryptDataStream = new CryptoStream(hasher, m_helper.CreateCryptoStream(m_mode), CryptoStreamMode.Write);
+                m_cryptoThreadPump = null;
             }
+
         }
 
         /// <summary>
@@ -1310,7 +1300,7 @@ namespace SharpAESCrypt
             public HashMismatchException(string message) : base(message) { }
         }
 
-        /// <summary> An exception raised to signal a hash mismatch on decryption </summary>
+        /// <summary> An exception raised to signal that a wrong password was used </summary>
         [Serializable]
         public class WrongPasswordException : CryptographicException
         {
@@ -1378,6 +1368,7 @@ namespace SharpAESCrypt
         {
             int a;
             byte[] buffer = new byte[1024 * 4];
+
             SharpAESCrypt c = new SharpAESCrypt(password, input, OperationMode.Decrypt, skipFileSizeCheck);
             if (maxThreads > 0) c.MaxCryptoThreads = maxThreads;
             while ((a = c.Read(buffer, 0, buffer.Length)) != 0)
@@ -1463,7 +1454,7 @@ namespace SharpAESCrypt
                 //We defer creation of the cryptostream until it is needed, 
                 // so the caller can change version, extensions, etc. 
                 // before we write the header
-                m_crypto = null;
+                m_cryptDataStream = null;
             }
             else
             {
@@ -1471,9 +1462,9 @@ namespace SharpAESCrypt
                 ReadEncryptionHeader(password, skipFileSizeCheck);
 
                 // We defer creation of the cryptostream until it is needed, 
-                // so the caller can change version, extensions, etc. 
-                // before we write the header
-                m_crypto = null;
+                // so the caller can change some behaviour properties 
+                // before decryption starts (e.g. for threading).
+                m_cryptDataStream = null;
             }
         }
 
@@ -1492,7 +1483,7 @@ namespace SharpAESCrypt
             {
                 if (m_mode == OperationMode.Decrypt)
                     throw new InvalidOperationException(Strings.VersionReadonlyForDecryption);
-                if (m_mode == OperationMode.Encrypt && m_crypto != null)
+                if (m_mode == OperationMode.Encrypt && m_cryptDataStream != null)
                     throw new InvalidOperationException(Strings.VersionReadonly);
                 if (value > MAX_FILE_VERSION)
                     throw new ArgumentOutOfRangeException(string.Format(Strings.VersionUnsupported, MAX_FILE_VERSION));
@@ -1514,7 +1505,7 @@ namespace SharpAESCrypt
             get { return m_maxCryptoThreads; }
             set
             {
-                if (m_crypto != null)
+                if (m_cryptDataStream != null)
                     throw new InvalidOperationException(Strings.ThreadingReadonly);
                 m_maxCryptoThreads = value;
             }
@@ -1530,7 +1521,7 @@ namespace SharpAESCrypt
         {
             get
             {
-                if (m_mode == OperationMode.Decrypt || (m_mode == OperationMode.Encrypt && m_crypto != null))
+                if (m_mode == OperationMode.Decrypt || (m_mode == OperationMode.Encrypt && m_cryptDataStream != null))
                     return m_extensions.AsReadOnly();
                 else
                     return m_extensions;
@@ -1605,7 +1596,7 @@ namespace SharpAESCrypt
         /// <returns>The number of bytes read</returns>
         public override int Read(byte[] buffer, int offset, int count)
         {
-            Stream s = Crypto; //INIT
+            Stream s = Crypto; // Make sure initialized!
 
             if (m_mode != OperationMode.Decrypt)
                 throw new InvalidOperationException(Strings.CannotReadWhileEncrypting);
@@ -1642,7 +1633,7 @@ namespace SharpAESCrypt
                     count = count - (count % BLOCK_SIZE);
                     int prependBlock = isInit ? 0 : BLOCK_SIZE;
 
-                    int read = ForceRead(m_finalCryptoReaderStream, buffer, offset + prependBlock, count - prependBlock);
+                    int read = ForceRead(Crypto, buffer, offset + prependBlock, count - prependBlock);
                     m_readcount += read;
 
                     if (read % BLOCK_SIZE != 0) throw new InvalidDataException(Strings.UnexpectedEndOfStream);
@@ -1664,8 +1655,7 @@ namespace SharpAESCrypt
                 else if (bytesRead == 0) // otherwise simply return current chunk
                 {
                     // read single next block and switch buffers
-
-                    int read = ForceRead(m_finalCryptoReaderStream, m_curBlock, 0, BLOCK_SIZE);
+                    int read = ForceRead(Crypto, m_curBlock, 0, BLOCK_SIZE);
                     m_readcount += read;
                     if (read % BLOCK_SIZE != 0) throw new InvalidDataException(Strings.UnexpectedEndOfStream);
 
@@ -1675,7 +1665,7 @@ namespace SharpAESCrypt
                         else
                         {
                             byte[] t = m_curBlock; m_curBlock = m_nextBlock; m_nextBlock = t;
-                            read = ForceRead(m_finalCryptoReaderStream, m_curBlock, 0, BLOCK_SIZE);
+                            read = ForceRead(Crypto, m_curBlock, 0, BLOCK_SIZE);
                             m_readcount += read;
                             if (read % BLOCK_SIZE != 0) throw new InvalidDataException(Strings.UnexpectedEndOfStream);
                         }
@@ -1702,12 +1692,16 @@ namespace SharpAESCrypt
 
             if (!m_hasReadFooter && isEOF)
             {
-                // Hack while testing multithreading
-                //if (m_finalCryptoReaderStream != m_crypto)
-                m_finalCryptoReaderStream.Close();
+                // First thing, close Crypto-stream and synch, before accessing hash values
+                Crypto.Close();
 
                 if (m_cryptoThreadPump != null)
+                {
                     m_cryptoThreadPump.WaitHandle.WaitOne();
+                    // If there was an exception (e.g. EOF in base stream) we rethrow
+                    if (m_cryptoThreadPump.Exception != null)
+                        throw m_cryptoThreadPump.Exception;
+                }
 
                 m_hasReadFooter = true;
 
@@ -1735,10 +1729,8 @@ namespace SharpAESCrypt
                 // so FlushFinalBlock need to be called.
                 //We cannot call FlushFinalBlock directly because it may
                 // have been called by the read operation.
+
                 byte[] hmac2 = m_payloadStream.GetHiddenBytes(hMacOffset, m_hmac.HashSize / 8);
-                if (m_maxCryptoThreads <= 1) Crypto.Close();
-                if (m_maxCryptoThreads <= 1) m_hasher.Close();
-                m_payloadStream.Close();
 
                 byte[] hmac1 = m_hmac.Hash;
                 for (int i = 0; i < hmac1.Length; i++)
@@ -1800,32 +1792,20 @@ namespace SharpAESCrypt
                         Write(padding, 0, padding.Length);
                     }
 
-                    //Not required without padding, but throws exception if the stream is used incorrectly
-                    Crypto.FlushFinalBlock();
-                    
-                    //The LeaveOpenStrem makes sure the underlying stream is not closed.
+                    // Not required without padding, but might throw exception if the stream is used incorrectly
+                    Stream crypto = Crypto;
+                    if (crypto is CryptoStream)
+                        ((CryptoStream)crypto).FlushFinalBlock();
+
+                    // The LeaveOpenStrem makes sure the underlying m_stream is not closed.
+                    // All other streams are automatically closed.
                     Crypto.Close();
 
-                    if (m_cryptoThreadPump != null)
+                    if (m_cryptoThreadPump != null) // Synchronize and check for exceptions
+                    {
                         m_cryptoThreadPump.WaitHandle.WaitOne();
-
-                    // Note: if dual threaded, The link stream blocks Crypto.Close(); until m_hasher has all bytes.
-                    //       This is why we have to close after Crypte.
-                    m_hasher.Close();
-                    
-                    
-                    //Thread.Sleep(1);
-                    //pass -->Thread FLUSH_WAIT_HANDLE to DataPump!!!
-                    //    OTHERWISE, all data Read, but NOT yet copied ("PUMPED" to other cryptostream)
-                    //Read and PasswordDeriveBytes on exceptions!
-                    // CHECK decrypt streams for blocking!!
-
-                    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 
-                    // ANYWAY: checked for Exception in parallel Thread!
-                    //     ADD option for commandline!
-                    //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-
+                        if (m_cryptoThreadPump.Exception != null) throw m_cryptoThreadPump.Exception;
+                    }
 
                     byte[] hmac = m_hmac.Hash;
 
@@ -1861,13 +1841,9 @@ namespace SharpAESCrypt
                 if (m_mode == OperationMode.Encrypt && !m_hasFlushedFinalBlock)
                     FlushFinalBlock();
 
-                if (m_crypto != null)
-                    m_crypto.Dispose();
-                m_crypto = null;
-
-                if (m_hasher != null)
-                    m_hasher.Dispose();
-                m_hasher = null;
+                if (m_cryptDataStream != null)
+                    m_cryptDataStream.Dispose();
+                m_cryptDataStream = null;
 
                 if (m_stream != null)
                     m_stream.Dispose();
@@ -1933,13 +1909,23 @@ namespace SharpAESCrypt
 
             try
             {
-                using (Stream inputstream = (inputname!=null) ? File.OpenRead(inputname) : Console.OpenStandardInput())
-                using (Stream outputstream = (outputname!=null) ? File.Create(outputname) : Console.OpenStandardOutput())
+#if DEBUG
+                DateTime start = DateTime.Now;
+#endif
+
+                using (Stream inputstream = (inputname != null) ? File.OpenRead(inputname) : Console.OpenStandardInput())
+                using (Stream outputstream = (outputname != null) ? File.Create(outputname) : Console.OpenStandardOutput())
                     if (encrypt)
                         Encrypt(args[1], inputstream, outputstream, maxThreads);
                     else
                         Decrypt(args[1], inputstream, outputstream, optimisticMode, maxThreads);
                 Environment.ExitCode = 0;
+
+#if DEBUG
+                TimeSpan dur = (DateTime.Now - start);
+                if (outputname != null) Console.WriteLine("Done! Crypting took about {0:0} ms", dur.TotalMilliseconds);
+#endif
+
             }
             catch (Exception ex)
             {
@@ -1979,7 +1965,7 @@ namespace SharpAESCrypt
             for (int useThreads = 1; useThreads <= 4; useThreads++)
             {
                 //Test each supported version
-                for (byte v = 0; v <= MAX_FILE_VERSION; v++) //!
+                for (byte v = 0; v <= MAX_FILE_VERSION; v++)
                 {
                     SharpAESCrypt.DefaultFileVersion = v;
                     // Test at boundaries and around the block/keysize margins
