@@ -241,7 +241,7 @@ namespace SharpAESCrypt.Threading
         /// <summary> Write to stripes. </summary>
         public override void Write(byte[] buffer, int offset, int count)
         {
-            if (m_mode != Mode.Join) throw new InvalidOperationException();
+            if (m_mode != Mode.Split) throw new InvalidOperationException();
 
             while (count > 0)
             {
