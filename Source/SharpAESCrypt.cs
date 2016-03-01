@@ -269,21 +269,21 @@ namespace SharpAESCrypt
         /// <summary>
         /// The size of the block unit used by the algorithm in bytes
         /// </summary>
-        private const int BLOCK_SIZE = 16;
+        public const int BLOCK_SIZE = 16;
         /// <summary>
         /// The size of the IV, in bytes, which is the same as the blocksize for AES
         /// </summary>
-        private const int IV_SIZE = 16;
+		public const int IV_SIZE = 16;
         /// <summary>
         /// The size of the key. For AES-256 that is 256/8 = 32
         /// </summary>
-        private const int KEY_SIZE = 32;
+		public const int KEY_SIZE = 32;
         /// <summary>
         /// The size of the SHA-256 output, which matches the KEY_SIZE
         /// </summary>
-        private const int HASH_SIZE = 32;
+        public const int HASH_SIZE = 32;
         /// <summary> Default number of threads to use </summary>
-        private const int DEFAULT_THREADS = 1;
+        public const int DEFAULT_THREADS = 1;
 
         #endregion
 
@@ -1942,16 +1942,6 @@ namespace SharpAESCrypt
             for (int testFor = 1; testFor <= 4; testFor++)
                 if (args[0].IndexOf((char)('0' + testFor)) >= 0) maxThreads = testFor;
 
-
-#if DEBUG
-
-            if (args[0].StartsWith("u", StringComparison.InvariantCultureIgnoreCase))
-            {
-                Unittest();
-                return;
-            }
-#endif
-
             if (!(encrypt || decrypt))
             {
                 Environment.ExitCode = 1;
@@ -2008,184 +1998,6 @@ namespace SharpAESCrypt
                 }
             }
         }
-
-        #region Unittest code
-#if DEBUG
-        /// <summary>
-        /// Performs a unittest to ensure that the program performs as expected
-        /// </summary>
-        private static void Unittest()
-        {
-            const int MIN_SIZE = 1024 * 5;
-            const int MAX_SIZE = 1024 * 1024 * 100; //100mb
-            const int REPETIONS = 1000;
-
-            bool allpass = true;
-
-            Random rnd = new Random();
-            Console.WriteLine("Running unittest");
-
-            for (int useThreads = 1; useThreads <= 4; useThreads++)
-            {
-                //Test each supported version
-                for (byte v = 0; v <= MAX_FILE_VERSION; v++)
-                {
-                    SharpAESCrypt.DefaultFileVersion = v;
-                    // Test at boundaries and around the block/keysize margins
-                    foreach (int bound in new int[] { 1 << 6, 1 << 8, 1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 20 })
-                        for (int i = Math.Max(0, bound - 6 * BLOCK_SIZE - 1); i <= bound + (6 * BLOCK_SIZE + 1); i++)
-                            using (MemoryStream ms = new MemoryStream())
-                            {
-                                byte[] tmp = new byte[i];
-                                rnd.NextBytes(tmp);
-                                ms.Write(tmp, 0, tmp.Length);
-                                allpass &= Unittest(string.Format("Testing version {0} with length = {1}, using {2} Thread(s) => ", v, ms.Length, useThreads)
-                                    , ms, -1, useThreads);
-                            }
-                    Console.WriteLine("allpass = {0}", allpass);
-                }
-
-                //Test each supported version with variavle buffer lengths
-                for (byte v = 0; v <= MAX_FILE_VERSION; v++)
-                {
-                    SharpAESCrypt.DefaultFileVersion = v;
-                    // Test at boundaries and around the block/keysize margins
-                    foreach (int bound in new int[] { 1 << 6, 1 << 8, 1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 20 })
-                        for (int i = Math.Max(0, bound - 6 * BLOCK_SIZE - 1); i <= bound + (6 * BLOCK_SIZE + 1); i++)
-                            using (MemoryStream ms = new MemoryStream())
-                            {
-                                byte[] tmp = new byte[i];
-                                rnd.NextBytes(tmp);
-                                ms.Write(tmp, 0, tmp.Length);
-                                allpass &= Unittest(string.Format("Testing version {0} with length = {1}, using {2} Thread(s) and variable buffer sizes => ",
-                                    v, ms.Length, useThreads), ms, i + 3, useThreads);
-                            }
-                    Console.WriteLine("allpass = {0}", allpass);
-                }
-            }
-
-            SharpAESCrypt.DefaultFileVersion = MAX_FILE_VERSION;
-            Console.WriteLine(string.Format("Initial tests complete, running bulk tests with v{0}", SharpAESCrypt.DefaultFileVersion));
-
-            for (int i = 0; i < REPETIONS; i++)
-            {
-                using (MemoryStream ms = new MemoryStream())
-                {
-                    byte[] tmp = new byte[rnd.Next(MIN_SIZE, MAX_SIZE)];
-                    rnd.NextBytes(tmp);
-                    ms.Write(tmp, 0, tmp.Length);
-                    int useThreads = (i % 4) + 1;
-                    allpass |= Unittest(string.Format("Testing bulk {0} of {1} with length = {2}, using {3} Thread(s) and variable buffer sizes => ", i, REPETIONS, ms.Length, useThreads)
-                        , ms, 4096, useThreads);
-                }
-            }
-
-            {
-                Console.WriteLine();
-                Console.WriteLine();
-                if (allpass)
-                    Console.WriteLine("**** All unittests passed ****");
-                else
-                    Console.WriteLine("**** SOME TESTS FAILED !! ****");
-                Console.WriteLine();
-            }
-        }
-
-        /// <summary>
-        /// Helper function to perform a single test.
-        /// </summary>
-        /// <param name="message">A message printed to the console</param>
-        /// <param name="input">The stream to test with</param>
-        private static bool Unittest(string message, MemoryStream input, int useRndBufSize, int useThreads)
-        {
-            Console.Write(message);
-            DateTime start = DateTime.Now;
-
-            const string PASSWORD_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!\"#¤%&/()=?`*'^¨-_.:,;<>|";
-            const int MIN_LEN = 1;
-            const int MAX_LEN = 25;
-
-            try
-            {
-                Random rnd = new Random();
-                char[] pwdchars = new char[rnd.Next(MIN_LEN, MAX_LEN)];
-                for (int i = 0; i < pwdchars.Length; i++)
-                    pwdchars[i] = PASSWORD_CHARS[rnd.Next(0, PASSWORD_CHARS.Length)];
-
-                input.Position = 0;
-
-                using (MemoryStream enc = new MemoryStream())
-                using (MemoryStream dec = new MemoryStream())
-                {
-                    Encrypt(new string(pwdchars), input, enc, maxThreads: useThreads);
-                    enc.Position = 0;
-
-                    if (useRndBufSize <= 0)
-                        Decrypt(new string(pwdchars), enc, dec, maxThreads: useThreads);
-                    else
-                        UnitStreamDecrypt(new string(pwdchars), enc, dec, useRndBufSize, useThreads);
-
-                    dec.Position = 0;
-                    input.Position = 0;
-
-                    if (dec.Length != input.Length)
-                        throw new ApplicationException(string.Format("Length differ {0} vs {1}", dec.Length, input.Length));
-
-                    for (int i = 0; i < dec.Length; i++)
-                        if (dec.ReadByte() != input.ReadByte())
-                            throw new ApplicationException(string.Format("Streams differ at byte {0}", i));
-                }
-            }
-            catch (Exception ex)
-            {
-                string consMsg = string.Format("FAILED: {0}", ex.Message);
-                Console.WriteLine(consMsg);
-                // Write a message with detailed error info to err_out. this can be redirected to a file.
-                Console.Error.WriteLine("{0}{1}{2}\r\n", message, consMsg,
-                    (ex is ApplicationException) ? "" : "\r\n" + ex.ToString());
-
-                return false;
-            }
-
-            TimeSpan dur = DateTime.Now - start;
-
-            Console.WriteLine("OK! [{0:N0} ms, Throughput {1:N1} MB/s]", dur.TotalMilliseconds, input.Length / dur.TotalSeconds / (1024 * 1024));
-            return true;
-        }
-
-
-
-        /// <summary>
-        /// For Unit testing: Decrypt a stream using the supplied password with changing (small) buffer sizes
-        /// </summary>
-        private static void UnitStreamDecrypt(string password, Stream input, Stream output, int bufferSizeSelect, int useThreads)
-        {
-            Random r = new Random();
-
-            int partBufs = Math.Min(bufferSizeSelect, 256);
-
-            byte[][] buffer = new byte[partBufs][];
-            for (int bs = 1; bs < partBufs; bs++)
-                buffer[bs] = new byte[bs];
-
-            buffer[0] = new byte[bufferSizeSelect];
-
-            int a;
-            SharpAESCrypt c = new SharpAESCrypt(password, input, OperationMode.Decrypt);
-            c.MaxCryptoThreads = useThreads;
-            do
-            {
-                int bufLen = r.Next(bufferSizeSelect) + 1;
-                byte[] useBuf = bufLen < partBufs ? buffer[bufLen] : buffer[0];
-                int useOffset = r.Next(useBuf.Length - bufLen + 1);
-                a = c.Read(useBuf, useOffset, bufLen);
-                output.Write(useBuf, useOffset, a);
-            } while (a != 0);
-        }
-
-#endif
-        #endregion
-
     }
 
 }
