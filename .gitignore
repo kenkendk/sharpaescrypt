@@ -3,5 +3,5 @@ SharpAESCrypt.userprefs
 *.suo
 Source/obj
 Source/packages
-Unitttest/bin
-Unitttest/obj
+Unittest/bin
+Unittest/obj
