@@ -1090,7 +1090,6 @@ namespace SharpAESCrypt
                 if (m_intbuf == null) initIntBuf();
 
                 int bufFilled = (int)(m_written - m_read);
-                int bufFree = m_intbuf.Length - bufFilled;
                 int bytesRead = 0;
 
                 if (count <= 0 || (m_eof && bufFilled <= m_hiddenByteCount)) return 0;
@@ -1157,6 +1156,10 @@ namespace SharpAESCrypt
         [Serializable]
         public class HashMismatchException :  CryptographicException
         {
+			/// <summary>
+			/// Initializes a new instance of the HashMismatchException class.
+			/// </summary>
+			/// <param name="message">The error message to report.</param>
             public HashMismatchException(string message) : base(message) { }
         }
 
@@ -1164,6 +1167,10 @@ namespace SharpAESCrypt
         [Serializable]
         public class WrongPasswordException : CryptographicException
         {
+			/// <summary>
+			/// Initializes a new instance of the WrongPasswordException class.
+			/// </summary>
+			/// <param name="message">The error message to report.</param>
             public WrongPasswordException(string message) : base(message) { }
         }
 
@@ -1220,6 +1227,7 @@ namespace SharpAESCrypt
         /// <param name="password">The password to encrypt with</param>
         /// <param name="input">The stream with encrypted data</param>
         /// <param name="output">The unencrypted output stream</param>
+		/// <param name="skipFileSizeCheck"><c>True</c> if the file-size check should be ignored, <c>false</c> otherwise. Only use this for error recovery modes</param>
         public static void Decrypt(string password, Stream input, Stream output, bool skipFileSizeCheck = false)
         {
             int a;
@@ -1248,6 +1256,7 @@ namespace SharpAESCrypt
         /// <param name="password">The password to decrypt with</param>
         /// <param name="inputfile">The file with encrypted data</param>
         /// <param name="outputfile">The unencrypted output file</param>
+		/// <param name="skipFileSizeCheck"><c>True</c> if the file-size check should be ignored, <c>false</c> otherwise. Only use this for error recovery modes</param>
         public static void Decrypt(string password, string inputfile, string outputfile, bool skipFileSizeCheck = false)
         {
             using (FileStream infs = File.OpenRead(inputfile))
