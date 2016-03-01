@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SharpAESCrypt", "SharpAESCrypt.csproj", "{8DE73DE9-1A21-44E0-B2DC-39468163C88C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unitttest", "..\Unitttest\Unitttest.csproj", "{F49AE566-F5AC-4594-95DD-17D989043C90}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Unittest", "..\Unittest\Unittest.csproj", "{F49AE566-F5AC-4594-95DD-17D989043C90}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
