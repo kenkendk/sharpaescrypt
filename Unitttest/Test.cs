@@ -178,6 +178,9 @@ namespace Unitttest
 		/// <summary>
 		/// For Unit testing: Decrypt a stream using the supplied password with changing (small) buffer sizes
 		/// </summary>
+		/// <param name="password">The password to decrypt with</param>
+		/// <param name="input">The input stream</param>
+		/// <param name="output">The output stream</param>
 		private static void UnitStreamDecrypt(string password, Stream input, Stream output, int bufferSizeSelect)
 		{
 			var r = new Random();
