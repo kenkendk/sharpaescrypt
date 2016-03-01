@@ -262,19 +262,19 @@ namespace SharpAESCrypt
         /// <summary>
         /// The size of the block unit used by the algorithm in bytes
         /// </summary>
-        private const int BLOCK_SIZE = 16;
+        public const int BLOCK_SIZE = 16;
         /// <summary>
         /// The size of the IV, in bytes, which is the same as the blocksize for AES
         /// </summary>
-        private const int IV_SIZE = 16;
+		public const int IV_SIZE = 16;
         /// <summary>
         /// The size of the key. For AES-256 that is 256/8 = 32
         /// </summary>
-        private const int KEY_SIZE = 32;
+		public const int KEY_SIZE = 32;
         /// <summary>
         /// The size of the SHA-256 output, which matches the KEY_SIZE
         /// </summary>
-        private const int HASH_SIZE = 32;
+		public const int HASH_SIZE = 32;
         #endregion
 
         #region Private instance variables
