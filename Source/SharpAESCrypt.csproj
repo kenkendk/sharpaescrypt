@@ -33,9 +33,6 @@
     <DocumentationFile>bin\Release\SharpAESCrypt.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup>
-    <StartupObject />
-  </PropertyGroup>
-  <PropertyGroup>
     <SignAssembly>true</SignAssembly>
   </PropertyGroup>
   <PropertyGroup>
