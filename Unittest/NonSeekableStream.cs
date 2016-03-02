@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 
-namespace Unitttest
+namespace SharpAESCrypt.Unittest
 {
 	public class NonSeekableStream : Stream
 	{
@@ -15,7 +15,7 @@ namespace Unitttest
 
 		public override void Flush() { m_source.Flush(); }
 		public override long Seek(long offset, SeekOrigin origin) { throw new NotSupportedException("Seeking not supported"); }
-        public override void SetLength(long value) { throw new NotSupportedException("SetLength not supported"); }
+		public override void SetLength(long value) { throw new NotSupportedException("SetLength not supported"); }
 		public override int Read(byte[] buffer, int offset, int count) { return m_source.Read(buffer, offset, count); }
 		public override void Write(byte[] buffer, int offset, int count) { m_source.Write(buffer, offset, count); }
 		public override bool CanRead { get { return m_source.CanRead; } }

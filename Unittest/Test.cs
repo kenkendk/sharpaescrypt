@@ -1,4 +1,4 @@
-﻿using NUnit.Framework;
+using NUnit.Framework;
 using System;
 using System.IO;
 using SharpAESCrypt;
@@ -6,7 +6,7 @@ using SharpAESCrypt;
 using System.Threading.Tasks;
 using System.Linq;
 
-namespace Unitttest
+namespace SharpAESCrypt.Unittest
 {
 	[TestFixture()]
 	public class Test
@@ -22,12 +22,12 @@ namespace Unitttest
 			var failed = 0;
 
 			//Test each supported version
-			for (byte v = 0; v <= SharpAESCrypt.SharpAESCrypt.MAX_FILE_VERSION; v++)
+			for (byte v = 0; v <= SharpAESCrypt.MAX_FILE_VERSION; v++)
 			{
-				SharpAESCrypt.SharpAESCrypt.DefaultFileVersion = v;
+				SharpAESCrypt.DefaultFileVersion = v;
 				// Test at boundaries and around the block/keysize margins
 				foreach (int bound in new int[] { 1 << 6, 1 << 8, 1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 20 })
-					for (int i = Math.Max(0, bound - 6 * SharpAESCrypt.SharpAESCrypt.BLOCK_SIZE - 1); i <= bound + (6 * SharpAESCrypt.SharpAESCrypt.BLOCK_SIZE + 1); i++)
+					for (int i = Math.Max(0, bound - 6 * SharpAESCrypt.BLOCK_SIZE - 1); i <= bound + (6 * SharpAESCrypt.BLOCK_SIZE + 1); i++)
 						using (MemoryStream ms = new MemoryStream())
 						{
 							byte[] tmp = new byte[i];
@@ -50,12 +50,12 @@ namespace Unitttest
 
 			//Test each supported version with variable buffer lengths
 			// Version 0 does not support this
-			for (byte v = 1; v <= SharpAESCrypt.SharpAESCrypt.MAX_FILE_VERSION; v++)
+			for (byte v = 1; v <= SharpAESCrypt.MAX_FILE_VERSION; v++)
 			{
-				SharpAESCrypt.SharpAESCrypt.DefaultFileVersion = v;
+				SharpAESCrypt.DefaultFileVersion = v;
 				// Test at boundaries and around the block/keysize margins
 				foreach (int bound in new int[] { 1 << 6, 1 << 8, 1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 20 })
-					for (int i = Math.Max(0, bound - 6 * SharpAESCrypt.SharpAESCrypt.BLOCK_SIZE - 1); i <= bound + (6 * SharpAESCrypt.SharpAESCrypt.BLOCK_SIZE + 1); i++)
+					for (int i = Math.Max(0, bound - 6 * SharpAESCrypt.BLOCK_SIZE - 1); i <= bound + (6 * SharpAESCrypt.BLOCK_SIZE + 1); i++)
 						using (var ms = new MemoryStream())
 						{
 							byte[] tmp = new byte[i];
@@ -78,12 +78,12 @@ namespace Unitttest
 			var failed = 0;
 
 			//Test each supported version with variable buffer lengths
-			for (byte v = 0; v <= SharpAESCrypt.SharpAESCrypt.MAX_FILE_VERSION; v++)
+			for (byte v = 0; v <= SharpAESCrypt.MAX_FILE_VERSION; v++)
 			{
-				SharpAESCrypt.SharpAESCrypt.DefaultFileVersion = v;
+				SharpAESCrypt.DefaultFileVersion = v;
 				// Test at boundaries and around the block/keysize margins
 				foreach (int bound in new int[] { 1 << 6, 1 << 8, 1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 20 })
-					for (int i = Math.Max(0, bound - 6 * SharpAESCrypt.SharpAESCrypt.BLOCK_SIZE - 1); i <= bound + (6 * SharpAESCrypt.SharpAESCrypt.BLOCK_SIZE + 1); i++)
+					for (int i = Math.Max(0, bound - 6 * SharpAESCrypt.BLOCK_SIZE - 1); i <= bound + (6 * SharpAESCrypt.BLOCK_SIZE + 1); i++)
 						using (MemoryStream ms = new MemoryStream())
 						{
 							byte[] tmp = new byte[i];
@@ -111,14 +111,14 @@ namespace Unitttest
             
             int initialThreadCount = System.Diagnostics.Process.GetCurrentProcess().Threads.Count;
 
-            byte v = SharpAESCrypt.SharpAESCrypt.MAX_FILE_VERSION;
+            byte v = SharpAESCrypt.MAX_FILE_VERSION;
             // Test multi-threading modes
             for (int useThreads = 2; useThreads <= 4; useThreads++)
             {
-                SharpAESCrypt.SharpAESCrypt.DefaultFileVersion = v;
+                SharpAESCrypt.DefaultFileVersion = v;
                 // Test at boundaries and around the block/keysize margins
                 foreach (int bound in new int[] { 1 << 6, 1 << 8, 1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 20 })
-                    for (int i = Math.Max(0, bound - 6 * SharpAESCrypt.SharpAESCrypt.BLOCK_SIZE - 1); i <= bound + (6 * SharpAESCrypt.SharpAESCrypt.BLOCK_SIZE + 1); i++)
+                    for (int i = Math.Max(0, bound - 6 * SharpAESCrypt.BLOCK_SIZE - 1); i <= bound + (6 * SharpAESCrypt.BLOCK_SIZE + 1); i++)
                         using (MemoryStream ms = new MemoryStream())
                         {
                             byte[] tmp = new byte[i];
@@ -165,25 +165,25 @@ namespace Unitttest
             int maxByteCount = 1 << 21; // must be larger than maximum test size below. 
 
             //Test each supported version with variable buffer lengths
-            for (byte v = 0; v <= SharpAESCrypt.SharpAESCrypt.MAX_FILE_VERSION; v++)
+            for (byte v = 0; v <= SharpAESCrypt.MAX_FILE_VERSION; v++)
             {
-                SharpAESCrypt.SharpAESCrypt.DefaultFileVersion = v;
+                SharpAESCrypt.DefaultFileVersion = v;
 
                 using (MemoryStream ms = new MemoryStream())
                 {
                     byte[] tmp = new byte[maxByteCount];
                     rnd.NextBytes(tmp);
                     string pwd = new string(Enumerable.Repeat('a', 10).Select(c => (char)(c + rnd.Next(26))).ToArray());
-                    SharpAESCrypt.SharpAESCrypt.Encrypt(pwd, new MemoryStream(tmp), ms, 1);
-                    int approxHeaderSize = ((int)ms.Length) - tmp.Length - SharpAESCrypt.SharpAESCrypt.HASH_SIZE;
+                    SharpAESCrypt.Encrypt(pwd, new MemoryStream(tmp), ms, 1);
+                    int approxHeaderSize = ((int)ms.Length) - tmp.Length - SharpAESCrypt.HASH_SIZE;
 
                     // Test at boundaries and around the block/keysize margins
                     int[] bounds = new int[] { 0, 1 << 6, 1 << 8, 1 << 10, 1 << 12, 1 << 14, 1 << 16, 1 << 20 };
                     Array.Reverse(bounds);
                     foreach (int bound in bounds)
                     {
-                        int low = Math.Max(-approxHeaderSize, bound - 6 * SharpAESCrypt.SharpAESCrypt.BLOCK_SIZE - 1);
-                        int high = Math.Min((int)ms.Length, bound + (6 * SharpAESCrypt.SharpAESCrypt.BLOCK_SIZE + 1));
+                        int low = Math.Max(-approxHeaderSize, bound - 6 * SharpAESCrypt.BLOCK_SIZE - 1);
+                        int high = Math.Min((int)ms.Length, bound + (6 * SharpAESCrypt.BLOCK_SIZE + 1));
                         for (int i = approxHeaderSize + high; i >= approxHeaderSize + low; i--)
                         {
                             ms.SetLength(i); // truncate input stream!
@@ -236,7 +236,7 @@ namespace Unitttest
 			var rnd = new Random();
 			var failed = 0;
 
-			SharpAESCrypt.SharpAESCrypt.DefaultFileVersion = SharpAESCrypt.SharpAESCrypt.MAX_FILE_VERSION;
+			SharpAESCrypt.DefaultFileVersion = SharpAESCrypt.MAX_FILE_VERSION;
 
 			for (int i = 0; i < REPETIONS; i++)
 			{
@@ -283,26 +283,26 @@ namespace Unitttest
 				using (var nenc = useNonSeekable ? (Stream)new NonSeekableStream(enc) : (Stream)enc)
 				using (var ndec = useNonSeekable ? (Stream)new NonSeekableStream(dec) : (Stream)dec)
 				{
-					SharpAESCrypt.SharpAESCrypt.Encrypt(new string(pwdchars), input, nenc, maxThreads: useThreads);
+					SharpAESCrypt.Encrypt(new string(pwdchars), input, nenc, maxThreads: useThreads);
 
                     // 1st pass: test with wrong password if version > 0
                     enc.Position = 0;
                     try
                     {
-                        if (SharpAESCrypt.SharpAESCrypt.DefaultFileVersion > 0)
+                        if (SharpAESCrypt.DefaultFileVersion > 0)
                         {
-                            SharpAESCrypt.SharpAESCrypt.Decrypt("!WRONG_PASSWORD!", nenc, dec, maxThreads: useThreads);
+                            SharpAESCrypt.Decrypt("!WRONG_PASSWORD!", nenc, dec, maxThreads: useThreads);
                             throw new InvalidOperationException("Wrong password not detected.");
                         }
                     }
-                    catch (SharpAESCrypt.SharpAESCrypt.WrongPasswordException)
+                    catch (SharpAESCrypt.WrongPasswordException)
                     { }
 
 
                     // 2nd Pass: data ok
                     enc.Position = 0;
 					if (useRndBufSize <= 0)
-						SharpAESCrypt.SharpAESCrypt.Decrypt(new string(pwdchars), nenc, dec, maxThreads: useThreads);
+						SharpAESCrypt.Decrypt(new string(pwdchars), nenc, dec, maxThreads: useThreads);
 					else
 						UnitStreamDecrypt(new string(pwdchars), nenc, dec, useRndBufSize, useThreads);
 					dec.Position = 0;
@@ -316,7 +316,7 @@ namespace Unitttest
 							throw new Exception(string.Format("Streams differ at byte {0}", i));
 
                     // 3rd pass: Change hash at end of file, and expect HashMismatch
-                    int changeHashAt = rnd.Next(SharpAESCrypt.SharpAESCrypt.HASH_SIZE);
+                    int changeHashAt = rnd.Next(SharpAESCrypt.HASH_SIZE);
                     enc.Position = enc.Length - changeHashAt - 1;
                     int b = enc.ReadByte();
                     enc.Position = enc.Length - changeHashAt - 1;
@@ -325,12 +325,12 @@ namespace Unitttest
                     try
                     {
                         if (useRndBufSize <= 0)
-                            SharpAESCrypt.SharpAESCrypt.Decrypt(new string(pwdchars), nenc, dec, maxThreads: useThreads);
+                            SharpAESCrypt.Decrypt(new string(pwdchars), nenc, dec, maxThreads: useThreads);
                         else
                             UnitStreamDecrypt(new string(pwdchars), nenc, dec, useRndBufSize, useThreads);
                         throw new InvalidDataException("Mismatching HMAC not detected.");
                     }
-                    catch (SharpAESCrypt.SharpAESCrypt.HashMismatchException)
+                    catch (SharpAESCrypt.HashMismatchException)
                     { }
 
 				}
@@ -366,7 +366,7 @@ namespace Unitttest
 			buffers[0] = new byte[bufferSizeSelect];
 
 			int a;
-            var c = new SharpAESCrypt.SharpAESCrypt(password, input, OperationMode.Decrypt, true);
+            var c = new SharpAESCrypt(password, input, OperationMode.Decrypt, true);
 			c.MaxCryptoThreads = useThreads;
 			do
 			{
@@ -378,4 +378,3 @@ namespace Unitttest
 		}
 	}
 }
-
