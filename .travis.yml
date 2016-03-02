@@ -2,7 +2,7 @@ language: csharp
 solution: Source/SharpAESCrypt.sln
 install:
   - nuget restore Source/SharpAESCrypt.sln
-  - nuget install NUnit.Runners -Version 3.0.1 -OutputDirectory testrunner
+  - nuget install NUnit.Runners -Version 2.6.4 -OutputDirectory testrunner
 script:
   - xbuild /p:Configuration=Release Source/SharpAESCrypt.sln
-  - mono ./testrunner/NUnit.Runners.3.0.1/tools/nunit-console.exe ./Unittest/bin/Release/Unittest.dll
+  - mono ./testrunner/NUnit.Runners.2.6.4/tools/nunit-console.exe ./Unittest/bin/Release/Unittest.dll
