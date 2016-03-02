@@ -13,7 +13,7 @@ namespace SharpAESCrypt.Unittest
 	{
 		const int MIN_SIZE = 1024 * 5;
 		const int MAX_SIZE = 1024 * 1024 * 100; //100mb
-		const int REPETIONS = 1000;
+		const int REPETIONS = 100; // Travis-CI stops after 120 min. 1000 bulks are too long.
 
 		[Test()]
 		public void TestVersions()
