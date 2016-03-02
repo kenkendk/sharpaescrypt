@@ -5,4 +5,5 @@ Source/obj
 Source/packages
 Unittest/bin
 Unittest/obj
-Unitttest
+Unitttest/bin
+Unitttest/obj
