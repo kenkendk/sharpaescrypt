@@ -33,9 +33,6 @@
     <DocumentationFile>bin\Release\SharpAESCrypt.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup>
-    <StartupObject />
-  </PropertyGroup>
-  <PropertyGroup>
     <SignAssembly>true</SignAssembly>
   </PropertyGroup>
   <PropertyGroup>
@@ -51,8 +48,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Threading\DirectStreamLink.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SharpAESCrypt.cs" />
+    <Compile Include="Threading\OverlappedStreamStriper.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app.config" />
