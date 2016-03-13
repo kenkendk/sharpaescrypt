@@ -63,7 +63,7 @@ namespace SharpAESCrypt.Threading
     /// <remarks>
     /// For .NET >= 4: Use ManualResetEventSlim and Task-class
     /// </remarks>
-    public class DirectStreamLink : IDisposable
+	internal class DirectStreamLink : IDisposable
     {
 
         /// <summary>
