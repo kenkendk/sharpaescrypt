@@ -63,7 +63,7 @@ namespace SharpAESCrypt.Threading
     /// via an event if necessary (i.e. for verification). While writing, the event can also be used to modify
     /// the overlap data.
     /// </summary>
-    public class OverlappedStreamStriper : Stream
+	internal class OverlappedStreamStriper : Stream
     {
         private class Strings
         {

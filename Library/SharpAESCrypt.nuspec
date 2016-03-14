@@ -2,14 +2,14 @@
 <package >
   <metadata>
     <id>SharpAESCrypt.dll</id>
-    <version>1.0.0</version>
+    <version>1.2.1</version>
     <authors>Kenneth Skovhede</authors>
     <owners>Kenneth Skovhede</owners>
     <licenseUrl>https://raw.githubusercontent.com/kenkendk/sharpaescrypt/master/license.txt</licenseUrl>
     <projectUrl>https://github.com/kenkendk/sharpaescrypt</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>A C# implementation of the AESCrypt library</description>
-    <releaseNotes>Initial NuGet version</releaseNotes>
+    <releaseNotes>Support for multi-threading and non-seekable streams</releaseNotes>
     <copyright>Copyright Kenneth Skovhede 2014</copyright>
     <tags>AES AESCrypt Crypto Encryption</tags>
     <dependencies />
