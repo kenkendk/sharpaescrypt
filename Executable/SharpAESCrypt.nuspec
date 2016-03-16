@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <package >
   <metadata>
-    <id>SharpAESCrypt.dll</id>
+    <id>SharpAESCrypt.exe</id>
     <version>1.3</version>
     <authors>Kenneth Skovhede</authors>
     <owners>Kenneth Skovhede</owners>
@@ -15,6 +15,7 @@
     <dependencies />
   </metadata>
   <files>
-    <file src="SharpAESCrypt.dll" target="lib/net20" />
+    <file src="SharpAESCrypt.exe" target="lib/net20" />
   </files>
 </package>
+

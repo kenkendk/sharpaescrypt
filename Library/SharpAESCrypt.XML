@@ -410,9 +410,12 @@
             <summary>
             The hashing algorithm used to digest data
             </summary></member>
-        <member name="F:SharpAESCrypt.SharpAESCrypt.SetupHelper.CRYPT_ALGORITHM">
+        <member name="F:SharpAESCrypt.SharpAESCrypt.SetupHelper.CRYPT_ALGORITHMS">
             <summary>
-            The algorithm used to encrypt and decrypt data
+            The choice of algorithms used to encrypt and decrypt data.
+            Supports AesCryptoServiceProvider to employ HW accelerated (AES-NI) crypting on Win8+.
+            Sadly, a workaround to load AesCryptoServiceProvider has to be employed to not break 2.0-compatibility
+            as the .NET team seems to have forgotten to register the name "AES" in .Net 3.5...
             </summary></member>
         <member name="F:SharpAESCrypt.SharpAESCrypt.SetupHelper.RAND_ALGORITHM">
             <summary>
@@ -427,6 +430,10 @@
             The encoding scheme for the password.
             UTF-16 should mean UTF-16LE, but Mono rejects the full name.
             A check is made when using the encoding, that it is indeed UTF-16LE.
+            </summary></member>
+        <member name="F:SharpAESCrypt.SharpAESCrypt.SetupHelper.m_useSymmetricAlgorithmType">
+            <summary>
+            The symmetric algorithm type to be used. Will be set and resolved on first instantiation.
             </summary></member>
         <member name="F:SharpAESCrypt.SharpAESCrypt.SetupHelper.m_crypt">
             <summary>
@@ -459,6 +466,11 @@
         <member name="F:SharpAESCrypt.SharpAESCrypt.SetupHelper.m_aesKey2">
             <summary>
             The key used to encrypt/decrypt bulk data
+            </summary></member>
+        <member name="M:SharpAESCrypt.SharpAESCrypt.SetupHelper.resolveCryptoAlgorithm``1(System.Collections.Generic.IList{System.String},``0@)">
+            <summary>
+            Helper function to resolve an algorithm name or type assembly qualified name to a type.
+            Can be used for any type of Crypto-classes.
             </summary></member>
         <member name="M:SharpAESCrypt.SharpAESCrypt.SetupHelper.#ctor(SharpAESCrypt.OperationMode,System.String,System.Byte[])">
             <summary>
