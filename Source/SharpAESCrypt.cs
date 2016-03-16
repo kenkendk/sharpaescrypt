@@ -647,9 +647,18 @@ namespace SharpAESCrypt
             private const string HASH_ALGORITHM = "SHA-256";
 
             /// <summary>
-            /// The algorithm used to encrypt and decrypt data
+            /// The choice of algorithms used to encrypt and decrypt data.
+            /// Supports AesCryptoServiceProvider to employ HW accelerated (AES-NI) crypting on Win8+.
+            /// Sadly, a workaround to load AesCryptoServiceProvider has to be employed to not break 2.0-compatibility
+            /// as the .NET team seems to have forgotten to register the name "AES" in .Net 3.5...
             /// </summary>
-            private const string CRYPT_ALGORITHM = "Rijndael";
+            private readonly string[] CRYPT_ALGORITHMS = new string[] 
+            {
+                "AES", // only works for .NET4+
+                // The TypeAQN works (in Win) when any .NET-Framework >= v3.5 is installed.
+                "TYPEAQN:System.Security.Cryptography.AesCryptoServiceProvider, System.Core, Version=3.5.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089", 
+                "Rijndael" // fallback if .NET < v3.5 installed, or outdated MONO
+            };
 
             /// <summary>
             /// The algorithm used to generate random data
@@ -667,6 +676,11 @@ namespace SharpAESCrypt
             /// A check is made when using the encoding, that it is indeed UTF-16LE.
             /// </summary>
             private const string PASSWORD_ENCODING = "utf-16";
+
+            /// <summary>
+            /// The symmetric algorithm type to be used. Will be set and resolved on first instantiation.
+            /// </summary>
+            private static Type m_useSymmetricAlgorithmType = null;
 
             /// <summary>
             /// The encryption instance
@@ -702,6 +716,39 @@ namespace SharpAESCrypt
             /// </summary>
             private byte[] m_aesKey2;
 
+
+            /// <summary>
+            /// Helper function to resolve an algorithm name or type assembly qualified name to a type.
+            /// Can be used for any type of Crypto-classes.
+            /// </summary>
+            private Type resolveCryptoAlgorithm<T>(IList<string> cryptoAlgoNames, out T retAlgoInst) where T : class
+            {
+                Type retAlgoType = null; retAlgoInst = null;
+                foreach (var algo in cryptoAlgoNames)
+                {
+                    if (algo.StartsWith("TYPEAQN:"))
+                    {
+                        var typeaqn = algo.Substring("TYPEAQN:".Length);
+                        retAlgoType = Type.GetType(typeaqn);
+                        if (retAlgoType != null)
+                        {
+                            retAlgoInst = Activator.CreateInstance(retAlgoType) as T;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        retAlgoInst = CryptoConfig.CreateFromName(algo) as T;
+                        if (retAlgoInst != null)
+                        {
+                            retAlgoType = retAlgoInst.GetType();
+                            break;
+                        }
+                    }
+                }
+                return retAlgoType;
+            }
+
             /// <summary>
             /// Initialize the setup
             /// </summary>
@@ -710,11 +757,17 @@ namespace SharpAESCrypt
             /// <param name="iv">The IV used, set to null if encrypting</param>
             public SetupHelper(OperationMode mode, string password, byte[] iv)
             {
-                m_crypt = SymmetricAlgorithm.Create(CRYPT_ALGORITHM);
+                // Check for AES-implementation to use and save that type for subsequent calls.
+                if (m_useSymmetricAlgorithmType == null)
+                    m_useSymmetricAlgorithmType = resolveCryptoAlgorithm(CRYPT_ALGORITHMS, out m_crypt);
+                else
+                    m_crypt = (SymmetricAlgorithm) Activator.CreateInstance(m_useSymmetricAlgorithmType);
 
                 //Not sure how to insert this with the CRYPT_ALGORITHM string
                 m_crypt.Padding = PaddingMode.None;
                 m_crypt.Mode = CipherMode.CBC;
+                m_crypt.BlockSize = BLOCK_SIZE * 8;
+                m_crypt.KeySize = KEY_SIZE * 8;
 
                 m_hash = HashAlgorithm.Create(HASH_ALGORITHM);
                 m_rand = RandomNumberGenerator.Create(/*RAND_ALGORITHM*/);
