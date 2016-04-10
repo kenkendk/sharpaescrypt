@@ -472,7 +472,11 @@ namespace SharpAESCrypt
         private void ReadEncryptionHeader(string password, bool skipFileSizeCheck)
         {
             byte[] tmp = new byte[MAGIC_HEADER.Length + 2];
-            if (m_stream.Read(tmp, 0, tmp.Length) != tmp.Length)
+            int hdrlen = 0, tmpCnt = 0;
+            while (hdrlen < tmp.Length && (tmpCnt = m_stream.Read(tmp, hdrlen, tmp.Length - hdrlen)) > 0)
+                hdrlen += tmpCnt;
+
+            if (hdrlen != tmp.Length)
                 throw new InvalidDataException(Strings.InvalidHeaderMarker);
 
             for (int i = 0; i < MAGIC_HEADER.Length; i++)

@@ -10,6 +10,7 @@ namespace SharpAESCrypt.Unittest
         public NonFulfillingReaderStream(Stream source)
         {
             m_source = source;
+            m_random = new Random();
         }
 
         #region implemented abstract members of Stream
