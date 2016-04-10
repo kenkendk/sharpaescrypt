@@ -367,15 +367,18 @@ namespace SharpAESCrypt.Unittest
 			buffers[0] = new byte[bufferSizeSelect];
 
 			int a;
-            var c = new SharpAESCrypt(password, input, OperationMode.Decrypt, true);
-			c.MaxCryptoThreads = useThreads;
-			do
-			{
-				var bufLen = r.Next(bufferSizeSelect) + 1;
-				var useBuf = bufLen < partBufs ? buffers[bufLen] : buffers[0];
-				a = c.Read(useBuf, 0, bufLen);
-				output.Write(useBuf, 0, a);
-			} while (a != 0);
+            using (input = new NonFulfillingReaderStream(input))
+            {
+                var c = new SharpAESCrypt(password, input, OperationMode.Decrypt, true);
+                c.MaxCryptoThreads = useThreads;
+                do
+                {
+                    var bufLen = r.Next(bufferSizeSelect) + 1;
+                    var useBuf = bufLen < partBufs ? buffers[bufLen] : buffers[0];
+                    a = c.Read(useBuf, 0, bufLen);
+                    output.Write(useBuf, 0, a);
+                } while (a != 0);
+            }
 		}
 	}
 }
