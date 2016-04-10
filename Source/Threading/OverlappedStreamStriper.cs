@@ -263,7 +263,8 @@ namespace SharpAESCrypt.Threading
                 if (c > (leftInChunk - overlapSize)) // Write touched overlapping area
                 {
                     int ovlStart = Math.Max(0, overlapSize - leftInChunk);
-                    int ovlCnt = Math.Min(c, overlapSize - ovlStart);
+                    int ovlEnd = overlapSize - leftInChunk + c;
+                    int ovlCnt = ovlEnd - ovlStart;
                     Array.Copy(buffer, offset - ovlCnt, m_overlap, ovlStart, ovlCnt);
                 }
 
