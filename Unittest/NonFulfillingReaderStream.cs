@@ -31,6 +31,7 @@ namespace SharpAESCrypt.Unittest
 
         public override int Read(byte[] buffer, int offset, int count) 
         {
+            if (count == 0) return 0;
             int c = m_random.Next(count) + 1;
             return m_source.Read(buffer, offset, c); 
         }
