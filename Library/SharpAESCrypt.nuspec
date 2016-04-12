@@ -2,14 +2,14 @@
 <package >
   <metadata>
     <id>SharpAESCrypt.dll</id>
-    <version>1.3</version>
+    <version>1.3.1</version>
     <authors>Kenneth Skovhede</authors>
     <owners>Kenneth Skovhede</owners>
     <licenseUrl>https://raw.githubusercontent.com/kenkendk/sharpaescrypt/master/license.txt</licenseUrl>
     <projectUrl>https://github.com/kenkendk/sharpaescrypt</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <description>A C# implementation of the AESCrypt library</description>
-    <releaseNotes>Support for hardware accellerated AES on Windows platforms</releaseNotes>
+    <releaseNotes>1.3.1 fixes a decrypt issue with multithreading and streams that do not return partial chunks. Support for hardware accellerated AES on Windows platforms</releaseNotes>
     <copyright>Copyright Kenneth Skovhede 2016</copyright>
     <tags>AES AESCrypt Crypto Encryption</tags>
     <dependencies />
