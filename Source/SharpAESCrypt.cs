@@ -472,7 +472,8 @@ namespace SharpAESCrypt
         private void ReadEncryptionHeader(string password, bool skipFileSizeCheck)
         {
             byte[] tmp = new byte[MAGIC_HEADER.Length + 2];
-            if (m_stream.Read(tmp, 0, tmp.Length) != tmp.Length)
+
+            if (ForceRead(m_stream, tmp, 0, tmp.Length) < tmp.Length)
                 throw new InvalidDataException(Strings.InvalidHeaderMarker);
 
             for (int i = 0; i < MAGIC_HEADER.Length; i++)
@@ -1352,7 +1353,7 @@ namespace SharpAESCrypt
         {
             int org_Count = count;
             int c;
-            while ((c = stream.Read(buf, offset, count)) != 0)
+            while (count > 0 && (c = stream.Read(buf, offset, count)) != 0)
             { count -= c; offset += c; }
             return (org_Count - count);
         }
