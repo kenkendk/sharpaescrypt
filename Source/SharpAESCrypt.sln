@@ -26,8 +26,12 @@ Global
 		$1.DirectoryNamespaceAssociation = PrefixedHierarchical
 		$1.ResourceNamePolicy = FileFormatDefault
 		$0.TextStylePolicy = $2
-		$2.inheritsSet = null
-		$2.scope = text/x-csharp
+		$2.inheritsSet = VisualStudio
+		$2.scope = text/plain
+		$2.FileWidth = 120
+		$2.TabsToSpaces = False
+		$2.EolMarker = Windows
+		$2.inheritsScope = text/plain
 		$0.CSharpFormattingPolicy = $3
 		$3.IndentSwitchBody = True
 		$3.IndentBlocksInsideExpressions = True
@@ -63,7 +67,7 @@ Global
 		$4.inheritsSet = VisualStudio
 		$4.inheritsScope = text/plain
 		$4.scope = text/plain
-		version = 1.3.1
+		version = 1.3.2
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
