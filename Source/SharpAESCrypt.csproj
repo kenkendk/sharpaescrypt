@@ -5,10 +5,11 @@
     <Version>1.3.3</Version>
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>SampleKey.snk</AssemblyOriginatorKeyFile>
-    <Copyright>LGPL 2016</Copyright>
+    <Copyright>LGPL 2018</Copyright>
     <Product>SharpAESCrypt</Product>
     <Company>SharpAESCrypt</Company>
     <PackageId>SharpAESCrypt</PackageId>
+    <ReleaseVersion>1.3.3</ReleaseVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
