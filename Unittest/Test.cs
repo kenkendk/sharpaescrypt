@@ -131,7 +131,7 @@ namespace SharpAESCrypt.Unittest
                             runTest.Wait(TimeSpan.FromSeconds(300)); // we give a single test a timeout of 5 minutes. This should well be enough!
                             if (!runTest.IsCompleted)
                             {
-                                ReportMessage("FAILED: Test failed with timeout. There must be a race.");
+                                WriteProgressLine("FAILED: Test failed with timeout. There must be a race.");
                                 failed++;
                             }
                             else if (!runTest.Result)
@@ -194,19 +194,19 @@ namespace SharpAESCrypt.Unittest
                                 // Run the test in separate thread to detect races / deadlocks
                                 Task<bool> runTest = Task<bool>.Run(() =>
                                     {
-                                        Console.Write("Testing version {0} with truncated stream length = {1}, using {2} Thread(s) and variable buffer sizes => ",
+										WriteProgress("Testing version {0} with truncated stream length = {1}, using {2} Thread(s) and variable buffer sizes => ",
                                             v, ms.Length, useThreads);
                                         try
                                         {
                                             UnitStreamDecrypt(pwd, ms, new MemoryStream(tmp), 256, useThreads);
-                                            ReportMessage("FAILED: Truncated stream accepted."); return false;
+                                            WriteProgressLine("FAILED: Truncated stream accepted."); return false;
                                         }
-                                        catch { ReportMessage("OK!"); return true; }
+                                        catch { WriteProgressLine("OK!"); return true; }
                                     });
                                 runTest.Wait(TimeSpan.FromSeconds(300)); // we give a single test a timeout of 5 minutes. This should well be enough!
                                 if (!runTest.IsCompleted)
                                 {
-                                    ReportMessage("FAILED: A test timed out. There must be a race.");
+                                    WriteProgressLine("FAILED: A test timed out. There must be a race.");
                                     throw new Exception("A test timed out. There must be a race.");
                                 }
                                 else if (!runTest.Result)
@@ -216,7 +216,7 @@ namespace SharpAESCrypt.Unittest
                                 int currentThreadCount = System.Diagnostics.Process.GetCurrentProcess().Threads.Count;
                                 if (currentThreadCount > initialThreadCount + 50) // too many threads. This shouldn't be!
                                 {
-                                    ReportMessage("FAILED: Allowed thread count threshold reached.");
+                                    WriteProgressLine("FAILED: Allowed thread count threshold reached.");
                                     throw new Exception("Allowed thread count threshold reached. Thread synchronization might not work. Also: check test framework!");
                                 }
                             }
@@ -264,7 +264,7 @@ namespace SharpAESCrypt.Unittest
 		/// <param name="input">The stream to test with</param>
 		private static bool Unittest(string message, MemoryStream input, int useRndBufSize, bool useNonSeekable, int useThreads)
 		{
-			Console.Write(message);
+			WriteProgress(message);
 
 			const string PASSWORD_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!\"#¤%&/()=?`*'^¨-_.:,;<>|";
 			const int MIN_LEN = 1;
@@ -338,11 +338,11 @@ namespace SharpAESCrypt.Unittest
 			}
 			catch (Exception ex)
 			{
-				ReportMessage("FAILED: " + ex.Message);
+				WriteProgressLine("FAILED: " + ex.Message);
 				return false;
 			}
 
-			ReportMessage("OK!");
+			WriteProgressLine("OK!");
 			return true;
 		}
 
@@ -352,9 +352,19 @@ namespace SharpAESCrypt.Unittest
 		/// </summary>
 		/// <param name="message">The message to write.</param>
 		/// <param name="args">The arguments to use.</param>
-		private static void ReportMessage (string message, params object [] args)
+		private static void WriteProgressLine(string message, params object [] args)
 		{
 			TestContext.Progress.WriteLine(message, args);
+		}
+
+		/// <summary>
+		/// Writes a message to the console or test context progress output
+		/// </summary>
+		/// <param name="message">The message to write.</param>
+		/// <param name="args">The arguments to use.</param>
+		private static void WriteProgress(string message, params object [] args)
+		{
+			TestContext.Progress.Write(message, args);
 		}
 
 
