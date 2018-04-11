@@ -5,6 +5,7 @@ using SharpAESCrypt;
 
 using System.Threading.Tasks;
 using System.Linq;
+using System.Text;
 
 namespace SharpAESCrypt.Unittest
 {
@@ -346,6 +347,20 @@ namespace SharpAESCrypt.Unittest
 			return true;
 		}
 
+		/// <summary>
+		/// An internal progress buffer for improving test unit output
+		/// </summary>
+		private static StringBuilder _progressBuffer = new StringBuilder();
+
+		/// <summary>
+		/// The number of success messages we have suppressed
+		/// </summary>
+		private static int _successCount = 0;
+
+		/// <summary>
+		/// The number of success messages to suppress before writing a combined message
+		/// </summary>
+		private const int SUCCESS_BATCH_SIZE = 50;
 
 		/// <summary>
 		/// Writes a message to the console or test context progress output
@@ -354,7 +369,26 @@ namespace SharpAESCrypt.Unittest
 		/// <param name="args">The arguments to use.</param>
 		private static void WriteProgressLine(string message, params object [] args)
 		{
-			TestContext.Progress.WriteLine(message, args);
+			if (message == "OK!") 
+			{
+				_successCount++;
+				if (_successCount >= SUCCESS_BATCH_SIZE)
+				{
+					TestContext.Progress.WriteLine("Suppressed {0} success messages", _successCount);
+					_successCount = 0;
+				}
+				return;
+			}
+
+			if (_successCount > 0)
+			{
+				TestContext.Progress.WriteLine ("Suppressed {0} success messages", _successCount);
+				_successCount = 0;
+			}
+
+			_progressBuffer.AppendFormat(message, args);
+			TestContext.Progress.WriteLine(_progressBuffer.ToString());
+			_progressBuffer.Clear();
 		}
 
 		/// <summary>
@@ -364,7 +398,7 @@ namespace SharpAESCrypt.Unittest
 		/// <param name="args">The arguments to use.</param>
 		private static void WriteProgress(string message, params object [] args)
 		{
-			TestContext.Progress.Write(message, args);
+			_progressBuffer.AppendFormat(message, args);
 		}
 
 
