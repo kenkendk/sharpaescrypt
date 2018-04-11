@@ -360,7 +360,7 @@ namespace SharpAESCrypt.Unittest
 		/// <summary>
 		/// The number of success messages to suppress before writing a combined message
 		/// </summary>
-		private const int SUCCESS_BATCH_SIZE = 50;
+		private const int SUCCESS_BATCH_SIZE = 500;
 
 		/// <summary>
 		/// Writes a message to the console or test context progress output
