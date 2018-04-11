@@ -1,7 +1,7 @@
 language: csharp
 solution: Source/SharpAESCrypt.sln
 install:
-  - msbuild Source/SharpAESCrypt.sln /t:Restore
+  - dotnet restore Source/SharpAESCrypt.sln
   - nuget install NUnit.Runners -Version 3.5.0 -OutputDirectory testrunner
 script:
   - msbuild /p:Configuration=Release Source/SharpAESCrypt.sln
