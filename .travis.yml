@@ -1,5 +1,6 @@
 language: csharp
 solution: Source/SharpAESCrypt.sln
+dotnet: 2.0
 install:
   - dotnet restore Source/SharpAESCrypt.sln
   - nuget install NUnit.Runners -Version 3.5.0 -OutputDirectory testrunner
