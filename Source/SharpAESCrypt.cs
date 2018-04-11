@@ -1015,7 +1015,9 @@ namespace SharpAESCrypt
             /// <returns>An HMAC algortihm using AES Key 2</returns>
             public HMAC GetHMAC()
             {
-                HMAC h = HMAC.Create(HMAC_ALGORITHM);
+				// TODO: Change back once we upgrade beyond netcore 2.0
+				//HMAC h = HMAC.Create (HMAC_ALGORITHM);
+				var h = (HMAC)CryptoConfig.CreateFromName(HMAC_ALGORITHM);
                 h.Key = m_aesKey2;
                 return h;
             }
