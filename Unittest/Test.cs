@@ -131,7 +131,7 @@ namespace SharpAESCrypt.Unittest
                             runTest.Wait(TimeSpan.FromSeconds(300)); // we give a single test a timeout of 5 minutes. This should well be enough!
                             if (!runTest.IsCompleted)
                             {
-                                Console.WriteLine("FAILED: Test failed with timeout. There must be a race.");
+                                ReportMessage("FAILED: Test failed with timeout. There must be a race.");
                                 failed++;
                             }
                             else if (!runTest.Result)
@@ -199,14 +199,14 @@ namespace SharpAESCrypt.Unittest
                                         try
                                         {
                                             UnitStreamDecrypt(pwd, ms, new MemoryStream(tmp), 256, useThreads);
-                                            Console.WriteLine("FAILED: Truncated stream accepted."); return false;
+                                            ReportMessage("FAILED: Truncated stream accepted."); return false;
                                         }
-                                        catch { Console.WriteLine("OK!"); return true; }
+                                        catch { ReportMessage("OK!"); return true; }
                                     });
                                 runTest.Wait(TimeSpan.FromSeconds(300)); // we give a single test a timeout of 5 minutes. This should well be enough!
                                 if (!runTest.IsCompleted)
                                 {
-                                    Console.WriteLine("FAILED: A test timed out. There must be a race.");
+                                    ReportMessage("FAILED: A test timed out. There must be a race.");
                                     throw new Exception("A test timed out. There must be a race.");
                                 }
                                 else if (!runTest.Result)
@@ -216,7 +216,7 @@ namespace SharpAESCrypt.Unittest
                                 int currentThreadCount = System.Diagnostics.Process.GetCurrentProcess().Threads.Count;
                                 if (currentThreadCount > initialThreadCount + 50) // too many threads. This shouldn't be!
                                 {
-                                    Console.WriteLine("FAILED: Allowed thread count threshold reached.");
+                                    ReportMessage("FAILED: Allowed thread count threshold reached.");
                                     throw new Exception("Allowed thread count threshold reached. Thread synchronization might not work. Also: check test framework!");
                                 }
                             }
@@ -338,14 +338,24 @@ namespace SharpAESCrypt.Unittest
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine("FAILED: " + ex.Message);
+				ReportMessage("FAILED: " + ex.Message);
 				return false;
 			}
 
-			Console.WriteLine("OK!");
+			ReportMessage("OK!");
 			return true;
 		}
 
+
+		/// <summary>
+		/// Writes a message to the console or test context progress output
+		/// </summary>
+		/// <param name="message">The message to write.</param>
+		/// <param name="args">The arguments to use.</param>
+		private static void ReportMessage (string message, params object [] args)
+		{
+			TestContext.Progress.WriteLine(message, args);
+		}
 
 
 		/// <summary>
