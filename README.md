@@ -11,7 +11,7 @@ Version 2 of the AES File Format is supported for reading and writing. Versions 
 Downloads
 =========
 
-If you use [NuGet](https://www.nuget.org) you can [install SharpAESCrypt from NuGet](https://www.nuget.org/packages/SharpAESCrypt.dll/1.0.0).
+If you use [NuGet](https://www.nuget.org) you can [install SharpAESCrypt from NuGet](https://www.nuget.org/packages/SharpAESCrypt.dll).
 
 You can download either the [commandline executable version](https://github.com/kenkendk/sharpaescrypt/raw/master/Executable/SharpAESCrypt.exe) or the [dll library version](https://github.com/kenkendk/sharpaescrypt/raw/master/Library/SharpAESCrypt.dll).
 
@@ -25,6 +25,8 @@ Linux, various distrbutions, Mono 2.6+, 32bit and 64bit
 OSX 10.6+, Mono 2.6+, 32bit and 64bit
 
 Besides a CLI runtime, no further dependencies are required.
+
+The 1.3.3 version is built targeting the .netstandard2.0 profile and works with .Net Framwork 4.6 and .netcoreapp2.0.
 
 Using From the Command Line
 ===========================
