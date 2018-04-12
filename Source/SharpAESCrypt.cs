@@ -770,9 +770,13 @@ namespace SharpAESCrypt
                 m_crypt.BlockSize = BLOCK_SIZE * 8;
                 m_crypt.KeySize = KEY_SIZE * 8;
 
-                m_hash = HashAlgorithm.Create(HASH_ALGORITHM);
+				// TODO: Change back once we upgrade beyond netcore 2.0
+				//m_hash = HashAlgorithm.Create(HASH_ALGORITHM);
+				//m_hmac = HMAC.Create(HMAC_ALGORITHM);
+
+				m_hash = (HashAlgorithm)CryptoConfig.CreateFromName(HASH_ALGORITHM);
                 m_rand = RandomNumberGenerator.Create(/*RAND_ALGORITHM*/);
-                m_hmac = HMAC.Create(HMAC_ALGORITHM);
+				m_hmac = (HMAC)CryptoConfig.CreateFromName(HMAC_ALGORITHM);
 
                 if (mode == OperationMode.Encrypt)
                 {
@@ -1011,7 +1015,9 @@ namespace SharpAESCrypt
             /// <returns>An HMAC algortihm using AES Key 2</returns>
             public HMAC GetHMAC()
             {
-                HMAC h = HMAC.Create(HMAC_ALGORITHM);
+				// TODO: Change back once we upgrade beyond netcore 2.0
+				//HMAC h = HMAC.Create (HMAC_ALGORITHM);
+				var h = (HMAC)CryptoConfig.CreateFromName(HMAC_ALGORITHM);
                 h.Key = m_aesKey2;
                 return h;
             }
