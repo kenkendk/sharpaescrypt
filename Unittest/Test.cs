@@ -5,6 +5,7 @@ using SharpAESCrypt;
 
 using System.Threading.Tasks;
 using System.Linq;
+using System.Text;
 
 namespace SharpAESCrypt.Unittest
 {
@@ -13,7 +14,7 @@ namespace SharpAESCrypt.Unittest
 	{
 		const int MIN_SIZE = 1024 * 5;
 		const int MAX_SIZE = 1024 * 1024 * 100; //100mb
-		const int REPETIONS = 200; // Travis-CI stops after 120 min. 1000 bulks are too long.
+		const int REPETIONS = 100; // Travis-CI stops after 45 min. 200 bulks are too long.
 
 		[Test()]
 		public void TestVersions()
@@ -131,7 +132,7 @@ namespace SharpAESCrypt.Unittest
                             runTest.Wait(TimeSpan.FromSeconds(300)); // we give a single test a timeout of 5 minutes. This should well be enough!
                             if (!runTest.IsCompleted)
                             {
-                                Console.WriteLine("FAILED: Test failed with timeout. There must be a race.");
+                                WriteProgressLine("FAILED: Test failed with timeout. There must be a race.");
                                 failed++;
                             }
                             else if (!runTest.Result)
@@ -194,19 +195,19 @@ namespace SharpAESCrypt.Unittest
                                 // Run the test in separate thread to detect races / deadlocks
                                 Task<bool> runTest = Task<bool>.Run(() =>
                                     {
-                                        Console.Write("Testing version {0} with truncated stream length = {1}, using {2} Thread(s) and variable buffer sizes => ",
+										WriteProgress("Testing version {0} with truncated stream length = {1}, using {2} Thread(s) and variable buffer sizes => ",
                                             v, ms.Length, useThreads);
                                         try
                                         {
                                             UnitStreamDecrypt(pwd, ms, new MemoryStream(tmp), 256, useThreads);
-                                            Console.WriteLine("FAILED: Truncated stream accepted."); return false;
+                                            WriteProgressLine("FAILED: Truncated stream accepted."); return false;
                                         }
-                                        catch { Console.WriteLine("OK!"); return true; }
+                                        catch { WriteProgressLine("OK!"); return true; }
                                     });
                                 runTest.Wait(TimeSpan.FromSeconds(300)); // we give a single test a timeout of 5 minutes. This should well be enough!
                                 if (!runTest.IsCompleted)
                                 {
-                                    Console.WriteLine("FAILED: A test timed out. There must be a race.");
+                                    WriteProgressLine("FAILED: A test timed out. There must be a race.");
                                     throw new Exception("A test timed out. There must be a race.");
                                 }
                                 else if (!runTest.Result)
@@ -216,7 +217,7 @@ namespace SharpAESCrypt.Unittest
                                 int currentThreadCount = System.Diagnostics.Process.GetCurrentProcess().Threads.Count;
                                 if (currentThreadCount > initialThreadCount + 50) // too many threads. This shouldn't be!
                                 {
-                                    Console.WriteLine("FAILED: Allowed thread count threshold reached.");
+                                    WriteProgressLine("FAILED: Allowed thread count threshold reached.");
                                     throw new Exception("Allowed thread count threshold reached. Thread synchronization might not work. Also: check test framework!");
                                 }
                             }
@@ -264,7 +265,7 @@ namespace SharpAESCrypt.Unittest
 		/// <param name="input">The stream to test with</param>
 		private static bool Unittest(string message, MemoryStream input, int useRndBufSize, bool useNonSeekable, int useThreads)
 		{
-			Console.Write(message);
+			WriteProgress(message);
 
 			const string PASSWORD_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!\"#¤%&/()=?`*'^¨-_.:,;<>|";
 			const int MIN_LEN = 1;
@@ -338,14 +339,67 @@ namespace SharpAESCrypt.Unittest
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine("FAILED: " + ex.Message);
+				WriteProgressLine("FAILED: " + ex.Message);
 				return false;
 			}
 
-			Console.WriteLine("OK!");
+			WriteProgressLine("OK!");
 			return true;
 		}
 
+		/// <summary>
+		/// An internal progress buffer for improving test unit output
+		/// </summary>
+		private static StringBuilder _progressBuffer = new StringBuilder();
+
+		/// <summary>
+		/// The number of success messages we have suppressed
+		/// </summary>
+		private static int _successCount = 0;
+
+		/// <summary>
+		/// The number of success messages to suppress before writing a combined message
+		/// </summary>
+		private const int SUCCESS_BATCH_SIZE = 100;
+
+		/// <summary>
+		/// Writes a message to the console or test context progress output
+		/// </summary>
+		/// <param name="message">The message to write.</param>
+		/// <param name="args">The arguments to use.</param>
+		private static void WriteProgressLine(string message, params object [] args)
+		{
+			if (message == "OK!") 
+			{
+				_successCount++;
+				if (_successCount >= SUCCESS_BATCH_SIZE)
+				{
+					TestContext.Progress.WriteLine("Suppressed {0} success messages", _successCount);
+					_successCount = 0;
+				}
+				return;
+			}
+
+			if (_successCount > 0)
+			{
+				TestContext.Progress.WriteLine ("Suppressed {0} success messages", _successCount);
+				_successCount = 0;
+			}
+
+			_progressBuffer.AppendFormat(message, args);
+			TestContext.Progress.WriteLine(_progressBuffer.ToString());
+			_progressBuffer.Clear();
+		}
+
+		/// <summary>
+		/// Writes a message to the console or test context progress output
+		/// </summary>
+		/// <param name="message">The message to write.</param>
+		/// <param name="args">The arguments to use.</param>
+		private static void WriteProgress(string message, params object [] args)
+		{
+			_progressBuffer.AppendFormat(message, args);
+		}
 
 
 		/// <summary>
