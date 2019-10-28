@@ -1986,6 +1986,7 @@ namespace SharpAESCrypt
 
         #endregion
 
+#if !NETSTANDARD2_0
         /// <summary>
         /// Main function, used when compiled as a standalone executable
         /// </summary>
@@ -2063,6 +2064,7 @@ namespace SharpAESCrypt
                 }
             }
         }
+#endif
     }
 
 }
