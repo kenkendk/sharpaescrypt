@@ -339,10 +339,6 @@ namespace SharpAESCrypt
         private int m_maxCryptoThreads = DEFAULT_THREADS;
 
         /// <summary>
-        /// True if the header is written, false otherwise. Used only for encryption.
-        /// </summary>
-        private bool m_hasWrittenHeader = false;
-        /// <summary>
         /// True if the footer has been written, false otherwise. Used only for encryption.
         /// </summary>
         private bool m_hasFlushedFinalBlock = false;
@@ -605,8 +601,6 @@ namespace SharpAESCrypt
                 tmpKey = m_helper.CalculateKeyHmac();
                 m_stream.Write(tmpKey, 0, tmpKey.Length);
             }
-
-            m_hasWrittenHeader = true;
         }
 
         /// <summary>
