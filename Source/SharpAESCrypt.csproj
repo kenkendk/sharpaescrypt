@@ -1,27 +1,20 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks Condition="'$(IsLibrary)'!='true'">net452;netcoreapp2.1</TargetFrameworks>
-    <TargetFrameworks Condition="'$(IsLibrary)'=='true'">netstandard2.0;net461</TargetFrameworks>
-    <Version>2.0.0</Version>
-    <Copyright>LGPL 2018</Copyright>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <Version>1.3.4</Version>
+    <Copyright>LGPL 2019</Copyright>
     <Product>SharpAESCrypt</Product>
     <Company>SharpAESCrypt</Company>
     <PackageId>SharpAESCrypt</PackageId>
-    <ReleaseVersion>2.0.0</ReleaseVersion>
+    <ReleaseVersion>1.3.4</ReleaseVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <DocumentationFile>bin\Release\$(TargetFramework)\SharpAESCrypt.xml</DocumentationFile>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(IsLibrary)'!='true'">
-    <OutputType>Exe</OutputType>
-    <PackageId>SharpAESCrypt.exe</PackageId>
-  </PropertyGroup>
-  
-  <PropertyGroup Condition="'$(IsLibrary)'=='true'">
-    <DefineConstants>IsLibrary</DefineConstants>
+  <PropertyGroup>
     <OutputType>Library</OutputType>
     <PackageId>SharpAESCrypt.dll</PackageId>
   </PropertyGroup>
@@ -31,7 +24,7 @@
     <RepositoryUrl>https://github.com/kenkendk/sharpaescrypt</RepositoryUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageDescription>A C# implementation of the AESCrypt library</PackageDescription>
-    <Copyright>Copyright Kenneth Skovhede 2018</Copyright>
+    <Copyright>Copyright Kenneth Skovhede 2019</Copyright>
     <Authors>Kenneth Skovhede</Authors>
     <PackageTags>AES AESCrypt Crypto Encryption</PackageTags>
     <PackageReleaseNotes>

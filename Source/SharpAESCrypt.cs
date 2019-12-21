@@ -1980,12 +1980,11 @@ namespace SharpAESCrypt
 
         #endregion
 
-#if !IsLibrary
         /// <summary>
         /// Main function, used when compiled as a standalone executable
         /// </summary>
         /// <param name="args">Commandline arguments</param>
-        public static void Main(string[] args)
+        public static void CommandLineMain(string[] args)
         {
             if (args.Length < 2)
             {
@@ -2058,7 +2057,6 @@ namespace SharpAESCrypt
                 }
             }
         }
-#endif
     }
 
 }

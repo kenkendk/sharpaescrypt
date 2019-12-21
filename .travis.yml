@@ -8,5 +8,4 @@ script:
   - dotnet build -c Release Source/SharpAESCrypt.sln
   - dotnet test Unittest/Unittest.csproj --filter TestCategory=Bulk
   - dotnet test Unittest/Unittest.csproj --filter TestCategory!=Bulk
-  - dotnet pack -c Release .\SharpAESCrypt.csproj -p:IsLibrary=true
-  - dotnet pack -c Release .\SharpAESCrypt.csproj -p:IsLibrary=false
+  - dotnet pack -c Release Source/SharpAESCrypt.csproj
