@@ -1,8 +1,0 @@
-Source/bin
-SharpAESCrypt.userprefs
-*.suo
-Source/obj
-Source/packages
-Unittest/bin
-Unittest/obj
-.vs
