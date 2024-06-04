@@ -1,3 +1,8 @@
+Deprecated
+==========
+This library is no longer maintained. I have created [a new and cleaner SharpAESCrypt implementation in the Duplicati repository](https://github.com/duplicati/sharpaescrypt).
+
+
 SharpAESCrypt
 =============
 
